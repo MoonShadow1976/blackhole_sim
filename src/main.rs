@@ -104,19 +104,29 @@ impl App {
         // 相机局部: +X=右, +Y=上, +Z=朝向目标(前方)
         let orient_inv = self.camera.orientation.inverse();
         let world_axes: [(nalgebra::Vector3<f32>, Color32, &str); 3] = [
-            (nalgebra::Vector3::new(1.0, 0.0, 0.0), Color32::from_rgb(255, 80, 80), "X"),
-            (nalgebra::Vector3::new(0.0, 1.0, 0.0), Color32::from_rgb(80, 255, 80), "Y"),
-            (nalgebra::Vector3::new(0.0, 0.0, 1.0), Color32::from_rgb(80, 130, 255), "Z"),
+            (
+                nalgebra::Vector3::new(1.0, 0.0, 0.0),
+                Color32::from_rgb(255, 80, 80),
+                "X",
+            ),
+            (
+                nalgebra::Vector3::new(0.0, 1.0, 0.0),
+                Color32::from_rgb(80, 255, 80),
+                "Y",
+            ),
+            (
+                nalgebra::Vector3::new(0.0, 0.0, 1.0),
+                Color32::from_rgb(80, 130, 255),
+                "Z",
+            ),
         ];
 
         egui::Area::new(egui::Id::new("axis_gizmo"))
             .anchor(egui::Align2::LEFT_TOP, egui::vec2(12.0, 12.0))
             .order(egui::Order::Foreground)
             .show(&self.egui_ctx, |ui| {
-                let (rect, _) = ui.allocate_exact_size(
-                    egui::vec2(90.0, 90.0),
-                    egui::Sense::hover(),
-                );
+                let (rect, _) =
+                    ui.allocate_exact_size(egui::vec2(90.0, 90.0), egui::Sense::hover());
                 let painter = ui.painter();
                 let center = rect.center();
                 let axis_len = 30.0;
@@ -139,10 +149,7 @@ impl App {
 
                 for (screen, color, label, _depth) in &projected {
                     let end = center + *screen;
-                    painter.line_segment(
-                        [center, end],
-                        Stroke::new(2.5, *color),
-                    );
+                    painter.line_segment([center, end], Stroke::new(2.5, *color));
                     // 轴标签放在轴末端外侧
                     let dir = if screen.length() > 0.001 {
                         screen.normalized()
@@ -209,184 +216,208 @@ impl App {
             .min_width(300.0)
             .resizable(true)
             .show(&self.egui_ctx, |ui| {
-                    ui.add_space(8.0);
-                    ui.heading("🌌 黑洞模拟系统");
-                    ui.label(
-                        egui::RichText::new("N-Body Black Hole Simulation")
-                            .weak()
-                            .small(),
-                    );
-                    ui.add_space(8.0);
-                    ui.separator();
+                ui.add_space(8.0);
+                ui.heading("🌌 黑洞模拟系统");
+                ui.label(
+                    egui::RichText::new("N-Body Black Hole Simulation")
+                        .weak()
+                        .small(),
+                );
+                ui.add_space(8.0);
+                ui.separator();
 
-                    ui.add_space(4.0);
-                    ui.label(
-                        egui::RichText::new("━━━ 状态信息 ━━━")
-                            .strong()
-                            .color(egui::Color32::from_rgb(120, 180, 255)),
-                    );
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new("━━━ 状态信息 ━━━")
+                        .strong()
+                        .color(egui::Color32::from_rgb(120, 180, 255)),
+                );
 
-                    ui.horizontal(|ui| {
-                        ui.label("状态:");
-                        ui.colored_label(egui::Color32::from_rgb(100, 255, 120), &phase);
-                    });
-                    ui.label(format!("模拟时间: {:.2} s", time));
-                    ui.label(format!("黑洞数量: {}", bh_count));
-                    ui.label(format!("天体数量: {}", self.sim.bodies.len()));
-                    ui.label(format!("碎片粒子: {}", self.sim.debris.len()));
-                    ui.label(format!("引力波数量: {}", wave_count));
-
-                    // 列出所有黑洞
-                    if bh_count > 0 {
-                        ui.add_space(4.0);
-                        ui.label(
-                            egui::RichText::new("── 黑洞列表 ──")
-                                .size(12.0)
-                                .weak(),
-                        );
-                        for (i, bh) in self.sim.black_holes.iter().enumerate() {
-                            ui.label(format!(
-                                "  {}: M={:.2}  pos=({:.1},{:.1},{:.1})",
-                                i + 1, bh.mass, bh.pos.x, bh.pos.y, bh.pos.z
-                            ));
-                        }
-                    }
-
-                    ui.add_space(4.0);
-                    ui.separator();
-
-                    ui.add_space(4.0);
-                    ui.label(
-                        egui::RichText::new("━━━ 模拟控制 ━━━")
-                            .strong()
-                            .color(egui::Color32::from_rgb(120, 180, 255)),
-                    );
-
-                    ui.horizontal(|ui| {
-                        if ui.button(if paused { "▶  继续" } else { "⏸ 暂停" }).clicked() {
-                            paused = !paused;
-                        }
-                        if ui.button("🔄 重置").clicked() {
-                            reset = true;
-                        }
-                    });
-
-                    ui.add_space(4.0);
-                    ui.checkbox(&mut show_waves, "显示引力波");
-                    ui.checkbox(&mut show_trails, "显示轨迹预测");
-                    ui.add_space(4.0);
-
-                    ui.add(
-                        egui::Slider::new(&mut sim_speed, 0.1..=20.0)
-                            .text("模拟速度")
-                            .step_by(0.05),
-                    );
-
-                    ui.add_space(4.0);
-                    ui.separator();
-
-                    ui.add_space(4.0);
-                    ui.label(
-                        egui::RichText::new("━━━ 添加黑洞 ━━━")
-                            .strong()
-                            .color(egui::Color32::from_rgb(255, 180, 100)),
-                    );
-
-                    ui.add(
-                        egui::Slider::new(&mut add_mass, 0.1..=5.0)
-                            .text("质量")
-                            .step_by(0.1),
-                    );
-
-                    ui.label("位置:");
-                    ui.horizontal(|ui| {
-                        ui.add(egui::DragValue::new(&mut add_px).speed(0.2).prefix("x: "));
-                        ui.add(egui::DragValue::new(&mut add_py).speed(0.2).prefix("y: "));
-                        ui.add(egui::DragValue::new(&mut add_pz).speed(0.2).prefix("z: "));
-                    });
-
-                    ui.label("速度:");
-                    ui.horizontal(|ui| {
-                        ui.add(egui::DragValue::new(&mut add_vx).speed(0.05).prefix("vx: "));
-                        ui.add(egui::DragValue::new(&mut add_vy).speed(0.05).prefix("vy: "));
-                        ui.add(egui::DragValue::new(&mut add_vz).speed(0.05).prefix("vz: "));
-                    });
-
-                    ui.add_space(6.0);
-                    if ui.button(egui::RichText::new("➕ 添加黑洞 (暂停)").size(14.0).strong())
-                        .clicked()
-                    {
-                        if self.sim.black_hole_count() < 8 {
-                            add_bh = true;
-                        }
-                    }
-                    if self.sim.black_hole_count() >= 8 {
-                        ui.label(
-                            egui::RichText::new("已达最大黑洞数 (8)")
-                                .color(egui::Color32::RED)
-                                .small(),
-                        );
-                    }
-
-                    ui.add_space(4.0);
-                    ui.separator();
-
-                    ui.add_space(4.0);
-                    ui.label(
-                        egui::RichText::new("━━━ 添加天体 ━━━")
-                            .strong()
-                            .color(egui::Color32::from_rgb(100, 255, 180)),
-                    );
-                    ui.label(
-                        egui::RichText::new("天体被洛希极限撕裂后形成吸积盘")
-                            .weak()
-                            .small(),
-                    );
-
-                    ui.add(
-                        egui::Slider::new(&mut body_mass, 0.05..=2.0)
-                            .text("质量")
-                            .step_by(0.05),
-                    );
-
-                    ui.label("位置:");
-                    ui.horizontal(|ui| {
-                        ui.add(egui::DragValue::new(&mut body_px).speed(0.2).prefix("x: "));
-                        ui.add(egui::DragValue::new(&mut body_py).speed(0.2).prefix("y: "));
-                        ui.add(egui::DragValue::new(&mut body_pz).speed(0.2).prefix("z: "));
-                    });
-
-                    ui.label("速度:");
-                    ui.horizontal(|ui| {
-                        ui.add(egui::DragValue::new(&mut body_vx).speed(0.05).prefix("vx: "));
-                        ui.add(egui::DragValue::new(&mut body_vy).speed(0.05).prefix("vy: "));
-                        ui.add(egui::DragValue::new(&mut body_vz).speed(0.05).prefix("vz: "));
-                    });
-
-                    ui.add_space(6.0);
-                    if ui.button(egui::RichText::new("➕ 添加天体 (暂停)").size(14.0).strong())
-                        .clicked()
-                    {
-                        add_body = true;
-                    }
-
-                    ui.add_space(4.0);
-                    ui.separator();
-
-                    ui.add_space(4.0);
-                    ui.label(
-                        egui::RichText::new("━━━ 操作说明 ━━━")
-                            .strong()
-                            .color(egui::Color32::from_rgb(120, 180, 255)),
-                    );
-                    ui.label("🖱  左键拖拽: 旋转视角");
-                    ui.label("🖱  滚轮: 缩放");
-                    ui.label("⌨  WASD: 平移");
-                    ui.label("⌨  QE: 上下平移");
-                    ui.label("⌨  方向键: 旋转");
-                    ui.label("⌨  SPACE: 暂停/继续");
-                    ui.label("⌨  ESC: 退出");
+                ui.horizontal(|ui| {
+                    ui.label("状态:");
+                    ui.colored_label(egui::Color32::from_rgb(100, 255, 120), &phase);
                 });
+                ui.label(format!("模拟时间: {:.2} s", time));
+                ui.label(format!("黑洞数量: {}", bh_count));
+                ui.label(format!("天体数量: {}", self.sim.bodies.len()));
+                ui.label(format!("碎片粒子: {}", self.sim.debris.len()));
+                ui.label(format!("引力波数量: {}", wave_count));
+
+                // 列出所有黑洞
+                if bh_count > 0 {
+                    ui.add_space(4.0);
+                    ui.label(egui::RichText::new("── 黑洞列表 ──").size(12.0).weak());
+                    for (i, bh) in self.sim.black_holes.iter().enumerate() {
+                        ui.label(format!(
+                            "  {}: M={:.2}  pos=({:.1},{:.1},{:.1})",
+                            i + 1,
+                            bh.mass,
+                            bh.pos.x,
+                            bh.pos.y,
+                            bh.pos.z
+                        ));
+                    }
+                }
+
+                ui.add_space(4.0);
+                ui.separator();
+
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new("━━━ 模拟控制 ━━━")
+                        .strong()
+                        .color(egui::Color32::from_rgb(120, 180, 255)),
+                );
+
+                ui.horizontal(|ui| {
+                    if ui
+                        .button(if paused { "▶  继续" } else { "⏸ 暂停" })
+                        .clicked()
+                    {
+                        paused = !paused;
+                    }
+                    if ui.button("🔄 重置").clicked() {
+                        reset = true;
+                    }
+                });
+
+                ui.add_space(4.0);
+                ui.checkbox(&mut show_waves, "显示引力波");
+                ui.checkbox(&mut show_trails, "显示轨迹预测");
+                ui.add_space(4.0);
+
+                ui.add(
+                    egui::Slider::new(&mut sim_speed, 0.1..=20.0)
+                        .text("模拟速度")
+                        .step_by(0.05),
+                );
+
+                ui.add_space(4.0);
+                ui.separator();
+
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new("━━━ 添加黑洞 ━━━")
+                        .strong()
+                        .color(egui::Color32::from_rgb(255, 180, 100)),
+                );
+
+                ui.add(
+                    egui::Slider::new(&mut add_mass, 0.1..=5.0)
+                        .text("质量")
+                        .step_by(0.1),
+                );
+
+                ui.label("位置:");
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut add_px).speed(0.2).prefix("x: "));
+                    ui.add(egui::DragValue::new(&mut add_py).speed(0.2).prefix("y: "));
+                    ui.add(egui::DragValue::new(&mut add_pz).speed(0.2).prefix("z: "));
+                });
+
+                ui.label("速度:");
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut add_vx).speed(0.05).prefix("vx: "));
+                    ui.add(egui::DragValue::new(&mut add_vy).speed(0.05).prefix("vy: "));
+                    ui.add(egui::DragValue::new(&mut add_vz).speed(0.05).prefix("vz: "));
+                });
+
+                ui.add_space(6.0);
+                if ui
+                    .button(
+                        egui::RichText::new("➕ 添加黑洞 (暂停)")
+                            .size(14.0)
+                            .strong(),
+                    )
+                    .clicked()
+                    && self.sim.black_hole_count() < 8
+                {
+                    add_bh = true;
+                }
+                if self.sim.black_hole_count() >= 8 {
+                    ui.label(
+                        egui::RichText::new("已达最大黑洞数 (8)")
+                            .color(egui::Color32::RED)
+                            .small(),
+                    );
+                }
+
+                ui.add_space(4.0);
+                ui.separator();
+
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new("━━━ 添加天体 ━━━")
+                        .strong()
+                        .color(egui::Color32::from_rgb(100, 255, 180)),
+                );
+                ui.label(
+                    egui::RichText::new("天体被洛希极限撕裂后形成吸积盘")
+                        .weak()
+                        .small(),
+                );
+
+                ui.add(
+                    egui::Slider::new(&mut body_mass, 0.05..=2.0)
+                        .text("质量")
+                        .step_by(0.05),
+                );
+
+                ui.label("位置:");
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut body_px).speed(0.2).prefix("x: "));
+                    ui.add(egui::DragValue::new(&mut body_py).speed(0.2).prefix("y: "));
+                    ui.add(egui::DragValue::new(&mut body_pz).speed(0.2).prefix("z: "));
+                });
+
+                ui.label("速度:");
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::DragValue::new(&mut body_vx)
+                            .speed(0.05)
+                            .prefix("vx: "),
+                    );
+                    ui.add(
+                        egui::DragValue::new(&mut body_vy)
+                            .speed(0.05)
+                            .prefix("vy: "),
+                    );
+                    ui.add(
+                        egui::DragValue::new(&mut body_vz)
+                            .speed(0.05)
+                            .prefix("vz: "),
+                    );
+                });
+
+                ui.add_space(6.0);
+                if ui
+                    .button(
+                        egui::RichText::new("➕ 添加天体 (暂停)")
+                            .size(14.0)
+                            .strong(),
+                    )
+                    .clicked()
+                {
+                    add_body = true;
+                }
+
+                ui.add_space(4.0);
+                ui.separator();
+
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new("━━━ 操作说明 ━━━")
+                        .strong()
+                        .color(egui::Color32::from_rgb(120, 180, 255)),
+                );
+                ui.label("🖱  左键拖拽: 旋转视角");
+                ui.label("🖱  滚轮: 缩放");
+                ui.label("⌨  WASD: 平移");
+                ui.label("⌨  QE: 上下平移");
+                ui.label("⌨  方向键: 旋转");
+                ui.label("⌨  SPACE: 暂停/继续");
+                ui.label("⌨  ESC: 退出");
+            });
 
         egui::TopBottomPanel::bottom("状态栏").show(&self.egui_ctx, |ui| {
             ui.horizontal(|ui| {
@@ -554,7 +585,6 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
-                return;
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if event.state == ElementState::Pressed {
@@ -618,9 +648,13 @@ impl ApplicationHandler for App {
                 if !self.sim.black_holes.is_empty() {
                     let total_mass: f32 = self.sim.black_holes.iter().map(|bh| bh.mass).sum();
                     if total_mass > 0.0 {
-                        let com: nalgebra::Vector3<f32> = self.sim.black_holes.iter()
+                        let com: nalgebra::Vector3<f32> = self
+                            .sim
+                            .black_holes
+                            .iter()
                             .map(|bh| bh.pos * bh.mass)
-                            .sum::<nalgebra::Vector3<f32>>() / total_mass;
+                            .sum::<nalgebra::Vector3<f32>>()
+                            / total_mass;
                         self.camera.target = com;
                     }
                 }
@@ -637,7 +671,9 @@ impl ApplicationHandler for App {
                 let show_waves = self.sim.show_gravity_waves;
                 let time = self.sim.time;
 
-                let bh_data: Vec<(nalgebra::Vector3<f32>, f32)> = self.sim.black_holes
+                let bh_data: Vec<(nalgebra::Vector3<f32>, f32)> = self
+                    .sim
+                    .black_holes
                     .iter()
                     .map(|bh| (bh.pos, bh.mass))
                     .collect();
@@ -645,7 +681,9 @@ impl ApplicationHandler for App {
                 let debris_data = self.sim.get_debris_render_data();
 
                 // 计算轨迹预测（暂停时显示，N 尽可能大）
-                let trail_instances: Vec<renderer::TrailInstance> = if self.ui_show_trails && self.ui_paused {
+                let trail_instances: Vec<renderer::TrailInstance> = if self.ui_show_trails
+                    && self.ui_paused
+                {
                     let mut instances = Vec::new();
                     // 模拟 60 秒，每步 0.05s（1200 步）
                     let steps = 2400;
@@ -684,10 +722,20 @@ impl ApplicationHandler for App {
                     // 如果正在配置黑洞参数，预览新黑洞轨迹（粉紫色 color_type=3），方形 (shape_type=0)
                     let preview_bh = physics::BlackHole {
                         mass: self.ui_add_mass,
-                        pos: nalgebra::Vector3::new(self.ui_add_pos_x, self.ui_add_pos_y, self.ui_add_pos_z),
-                        vel: nalgebra::Vector3::new(self.ui_add_vel_x, self.ui_add_vel_y, self.ui_add_vel_z),
+                        pos: nalgebra::Vector3::new(
+                            self.ui_add_pos_x,
+                            self.ui_add_pos_y,
+                            self.ui_add_pos_z,
+                        ),
+                        vel: nalgebra::Vector3::new(
+                            self.ui_add_vel_x,
+                            self.ui_add_vel_y,
+                            self.ui_add_vel_z,
+                        ),
                     };
-                    let (preview_bh_trails, _) = self.sim.predict_trajectories_with_black_hole(&preview_bh, steps, dt_step);
+                    let (preview_bh_trails, _) =
+                        self.sim
+                            .predict_trajectories_with_black_hole(&preview_bh, steps, dt_step);
                     if let Some(preview) = preview_bh_trails.last() {
                         let n = preview.len();
                         for (i, pos) in preview.iter().enumerate() {
@@ -705,11 +753,21 @@ impl ApplicationHandler for App {
                     // 如果正在配置天体参数，预览新天体轨迹（黄色 color_type=2），三角形 (shape_type=1)
                     let preview_body = physics::CelestialBody {
                         mass: self.ui_body_mass,
-                        pos: nalgebra::Vector3::new(self.ui_body_pos_x, self.ui_body_pos_y, self.ui_body_pos_z),
-                        vel: nalgebra::Vector3::new(self.ui_body_vel_x, self.ui_body_vel_y, self.ui_body_vel_z),
+                        pos: nalgebra::Vector3::new(
+                            self.ui_body_pos_x,
+                            self.ui_body_pos_y,
+                            self.ui_body_pos_z,
+                        ),
+                        vel: nalgebra::Vector3::new(
+                            self.ui_body_vel_x,
+                            self.ui_body_vel_y,
+                            self.ui_body_vel_z,
+                        ),
                         hardness: 1.0,
                     };
-                    let (_, preview_trails) = self.sim.predict_trajectories_with_body(&preview_body, steps, dt_step);
+                    let (_, preview_trails) =
+                        self.sim
+                            .predict_trajectories_with_body(&preview_body, steps, dt_step);
                     if let Some(preview) = preview_trails.last() {
                         let n = preview.len();
                         for (i, pos) in preview.iter().enumerate() {
@@ -738,7 +796,11 @@ impl ApplicationHandler for App {
                     };
                     let preview_black_hole = if self.ui_paused {
                         Some((
-                            nalgebra::Vector3::new(self.ui_add_pos_x, self.ui_add_pos_y, self.ui_add_pos_z),
+                            nalgebra::Vector3::new(
+                                self.ui_add_pos_x,
+                                self.ui_add_pos_y,
+                                self.ui_add_pos_z,
+                            ),
                             self.ui_add_mass,
                         ))
                     } else {
@@ -752,7 +814,18 @@ impl ApplicationHandler for App {
                     } else {
                         None
                     };
-                    match renderer.render(&self.camera, &wave_objects, &bh_data, &body_data, &debris_data, show_waves, time, &trail_instances, preview_black_hole, preview_body) {
+                    match renderer.render(renderer::RenderParams {
+                        camera: &self.camera,
+                        waves: &wave_objects,
+                        black_holes: &bh_data,
+                        bodies: &body_data,
+                        debris: &debris_data,
+                        show_waves,
+                        time,
+                        trails: &trail_instances,
+                        preview_black_hole,
+                        preview_body,
+                    }) {
                         Ok(result) => result,
                         Err(wgpu::SurfaceError::Outdated) | Err(wgpu::SurfaceError::Lost) => {
                             let size = window_ref.inner_size();
@@ -781,11 +854,11 @@ impl ApplicationHandler for App {
                         .egui_ctx
                         .tessellate(full_output.shapes, screen_descriptor.pixels_per_point);
 
-                    let mut encoder = renderer_ref
-                        .device
-                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    let mut encoder = renderer_ref.device.create_command_encoder(
+                        &wgpu::CommandEncoderDescriptor {
                             label: Some("egui 命令编码器"),
-                        });
+                        },
+                    );
 
                     for (id, image_delta) in &full_output.textures_delta.set {
                         egui_renderer.update_texture(
@@ -859,19 +932,20 @@ fn setup_chinese_font(ctx: &egui::Context) {
 
     // 尝试加载系统中文字体
     let font_paths = [
-        r"C:\Windows\Fonts\msyh.ttc",      // 微软雅黑
-        r"C:\Windows\Fonts\msyhbd.ttc",    // 微软雅黑粗体
-        r"C:\Windows\Fonts\simhei.ttf",    // 黑体
-        r"C:\Windows\Fonts\simsun.ttc",    // 宋体
+        r"C:\Windows\Fonts\msyh.ttc",   // 微软雅黑
+        r"C:\Windows\Fonts\msyhbd.ttc", // 微软雅黑粗体
+        r"C:\Windows\Fonts\simhei.ttf", // 黑体
+        r"C:\Windows\Fonts\simsun.ttc", // 宋体
     ];
 
     let mut loaded = false;
     for path in &font_paths {
         if let Ok(data) = std::fs::read(path) {
             let name = format!("chinese_{}", loaded);
-            fonts
-                .font_data
-                .insert(name.clone(), std::sync::Arc::new(egui::FontData::from_owned(data)));
+            fonts.font_data.insert(
+                name.clone(),
+                std::sync::Arc::new(egui::FontData::from_owned(data)),
+            );
             fonts
                 .families
                 .entry(egui::FontFamily::Proportional)

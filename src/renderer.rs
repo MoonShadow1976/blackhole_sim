@@ -7,6 +7,19 @@ use wgpu::util::DeviceExt;
 use crate::camera::OrbitCamera;
 use crate::geometry::{create_ring, create_sphere, Vertex};
 
+pub struct RenderParams<'a> {
+    pub camera: &'a OrbitCamera,
+    pub waves: &'a [(Vector3<f32>, f32, u32, f32, f32)],
+    pub black_holes: &'a [(Vector3<f32>, f32)],
+    pub bodies: &'a [([f32; 3], f32)],
+    pub debris: &'a [([f32; 3], f32, f32)],
+    pub show_waves: bool,
+    pub time: f32,
+    pub trails: &'a [TrailInstance],
+    pub preview_black_hole: Option<(Vector3<f32>, f32)>,
+    pub preview_body: Option<([f32; 3], f32)>,
+}
+
 /// 相机 uniform：视图投影矩阵
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -32,7 +45,13 @@ pub struct ModelUniform {
 }
 
 impl ModelUniform {
-    pub fn new(model: [[f32; 4]; 4], object_type: u32, time: f32, alpha: f32, bh_mass: f32) -> Self {
+    pub fn new(
+        model: [[f32; 4]; 4],
+        object_type: u32,
+        time: f32,
+        alpha: f32,
+        bh_mass: f32,
+    ) -> Self {
         Self {
             model,
             object_type,
@@ -719,9 +738,7 @@ impl Renderer {
         };
         let instance = wgpu::Instance::new(&instance_desc);
 
-        let surface = instance
-            .create_surface(window)
-            .expect("无法创建 surface");
+        let surface = instance.create_surface(window).expect("无法创建 surface");
 
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -954,11 +971,12 @@ impl Renderer {
         });
 
         // 复用现有的 bind_group_layout（碎片着色器只用 binding 0 的 camera uniform）
-        let debris_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("碎片管线布局"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        });
+        let debris_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("碎片管线布局"),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            });
 
         let debris_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("碎片渲染管线"),
@@ -1050,10 +1068,18 @@ impl Renderer {
 
         // 四边形顶点（两个三角形组成一个 quad，uv 范围 [-1, 1]）
         let quad_verts: [QuadVertex; 4] = [
-            QuadVertex { position: [-1.0, -1.0] },
-            QuadVertex { position: [1.0, -1.0] },
-            QuadVertex { position: [1.0, 1.0] },
-            QuadVertex { position: [-1.0, 1.0] },
+            QuadVertex {
+                position: [-1.0, -1.0],
+            },
+            QuadVertex {
+                position: [1.0, -1.0],
+            },
+            QuadVertex {
+                position: [1.0, 1.0],
+            },
+            QuadVertex {
+                position: [-1.0, 1.0],
+            },
         ];
         let quad_vertices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("四边形顶点缓冲"),
@@ -1127,12 +1153,17 @@ impl Renderer {
                                 format: wgpu::VertexFormat::Float32,
                             },
                             wgpu::VertexAttribute {
-                                offset: (std::mem::size_of::<[f32; 3]>() + std::mem::size_of::<f32>()) as wgpu::BufferAddress,
+                                offset: (std::mem::size_of::<[f32; 3]>()
+                                    + std::mem::size_of::<f32>())
+                                    as wgpu::BufferAddress,
                                 shader_location: 3,
                                 format: wgpu::VertexFormat::Float32,
                             },
                             wgpu::VertexAttribute {
-                                offset: (std::mem::size_of::<[f32; 3]>() + std::mem::size_of::<f32>() + std::mem::size_of::<f32>()) as wgpu::BufferAddress,
+                                offset: (std::mem::size_of::<[f32; 3]>()
+                                    + std::mem::size_of::<f32>()
+                                    + std::mem::size_of::<f32>())
+                                    as wgpu::BufferAddress,
                                 shader_location: 4,
                                 format: wgpu::VertexFormat::Float32,
                             },
@@ -1230,24 +1261,15 @@ impl Renderer {
     /// debris: 碎片粒子列表 (位置, 速度大小, 寿命)
     pub fn render(
         &mut self,
-        camera: &OrbitCamera,
-        waves: &[(Vector3<f32>, f32, u32, f32, f32)],
-        black_holes: &[(Vector3<f32>, f32)],
-        bodies: &[([f32; 3], f32)],
-        debris: &[([f32; 3], f32, f32)],
-        show_waves: bool,
-        time: f32,
-        trails: &[TrailInstance],
-        preview_black_hole: Option<(Vector3<f32>, f32)>,
-        preview_body: Option<([f32; 3], f32)>,
+        params: RenderParams,
     ) -> Result<(wgpu::SurfaceTexture, wgpu::TextureView), wgpu::SurfaceError> {
         let aspect = self.config.width as f32 / self.config.height as f32;
         let proj = Matrix4::new_perspective(aspect, 60.0_f32.to_radians(), 0.1, 10000.0);
-        let view = camera.view_matrix();
+        let view = params.camera.view_matrix();
         let view_proj = proj * view;
         let view_inv = view.try_inverse().unwrap_or(Matrix4::identity());
         let proj_inv = proj.try_inverse().unwrap_or(Matrix4::identity());
-        let cam_pos = camera.position();
+        let cam_pos = params.camera.position();
         let camera_uniform = CameraUniform {
             view_proj: view_proj.into(),
             view_inv: view_inv.into(),
@@ -1263,7 +1285,7 @@ impl Renderer {
 
         // 更新黑洞数组
         let mut bhs_uniform = BlackHolesUniform {
-            count: black_holes.len() as u32,
+            count: params.black_holes.len() as u32,
             _pad0: 0.0,
             _pad1: 0.0,
             _pad2: 0.0,
@@ -1272,20 +1294,18 @@ impl Renderer {
                 mass: 0.0,
             }; 8],
         };
-        for (i, (pos, mass)) in black_holes.iter().take(8).enumerate() {
+        for (i, (pos, mass)) in params.black_holes.iter().take(8).enumerate() {
             bhs_uniform.holes[i] = BlackHoleData {
                 pos: [pos.x, pos.y, pos.z],
                 mass: *mass,
             };
         }
-        self.queue.write_buffer(
-            &self.bhs_buffer,
-            0,
-            bytemuck::cast_slice(&[bhs_uniform]),
-        );
+        self.queue
+            .write_buffer(&self.bhs_buffer, 0, bytemuck::cast_slice(&[bhs_uniform]));
 
         // 准备碎片实例数据（最多 600 个粒子，每帧只写入实际粒子数）
-        let debris_instances: Vec<DebrisInstance> = debris
+        let debris_instances: Vec<DebrisInstance> = params
+            .debris
             .iter()
             .take(600)
             .map(|(pos, speed, life)| DebrisInstance {
@@ -1305,12 +1325,12 @@ impl Renderer {
         }
 
         // 写入轨迹实例数据（在 render pass 之前）
-        let trail_count = trails.len().min(4000) as u32;
+        let trail_count = params.trails.len().min(4000) as u32;
         if trail_count > 0 {
             self.queue.write_buffer(
                 &self.trail_instance_buffer,
                 0,
-                bytemuck::cast_slice(&trails[..trail_count as usize]),
+                bytemuck::cast_slice(&params.trails[..trail_count as usize]),
             );
         }
 
@@ -1319,9 +1339,11 @@ impl Renderer {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("3D 渲染命令编码器"),
-        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("3D 渲染命令编码器"),
+            });
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -1363,62 +1385,100 @@ impl Renderer {
                 let idx = uniforms.len() as u32;
                 let m = Matrix4::new_scaling(500.0);
                 let model_matrix = Matrix4::new_translation(&Vector3::new(0.0, 0.0, 0.0)) * m;
-                uniforms.push(ModelUniform::new(model_matrix.into(), 3, time, 1.0, 0.0));
+                uniforms.push(ModelUniform::new(
+                    model_matrix.into(),
+                    3,
+                    params.time,
+                    1.0,
+                    0.0,
+                ));
                 draw_calls.push((idx * MODEL_UNIFORM_SIZE as u32, 3));
             }
 
             // 2. 天体（中间）
-            for (pos, mass) in bodies.iter() {
+            for (pos, mass) in params.bodies.iter() {
                 let scale = mass.powf(0.4) * 0.8;
                 let idx = uniforms.len() as u32;
                 let m = Matrix4::new_scaling(scale);
-                let model_matrix = Matrix4::new_translation(&Vector3::new(pos[0], pos[1], pos[2])) * m;
-                uniforms.push(ModelUniform::new(model_matrix.into(), 4, time, 1.0, 0.0));
+                let model_matrix =
+                    Matrix4::new_translation(&Vector3::new(pos[0], pos[1], pos[2])) * m;
+                uniforms.push(ModelUniform::new(
+                    model_matrix.into(),
+                    4,
+                    params.time,
+                    1.0,
+                    0.0,
+                ));
                 draw_calls.push((idx * MODEL_UNIFORM_SIZE as u32, 4));
             }
 
             // 3. 引力波
-            if show_waves {
-                for (pos, scale, obj_type, alpha, bh_mass) in waves.iter() {
+            if params.show_waves {
+                for (pos, scale, obj_type, alpha, bh_mass) in params.waves.iter() {
                     let idx = uniforms.len() as u32;
                     let m = Matrix4::new_scaling(*scale);
                     let model_matrix = Matrix4::new_translation(pos) * m;
-                    uniforms.push(ModelUniform::new(model_matrix.into(), *obj_type, time, *alpha, *bh_mass));
+                    uniforms.push(ModelUniform::new(
+                        model_matrix.into(),
+                        *obj_type,
+                        params.time,
+                        *alpha,
+                        *bh_mass,
+                    ));
                     draw_calls.push((idx * MODEL_UNIFORM_SIZE as u32, *obj_type));
                 }
             }
 
             // 4. 黑洞（事件视界，最近，最后渲染，遮挡后面的物体）
-            for (pos, mass) in black_holes.iter() {
+            for (pos, mass) in params.black_holes.iter() {
                 let idx = uniforms.len() as u32;
                 let event_horizon_r = 2.0 * mass;
                 let m = Matrix4::new_scaling(event_horizon_r);
                 let model_matrix = Matrix4::new_translation(pos) * m;
-                uniforms.push(ModelUniform::new(model_matrix.into(), 0, time, 1.0, *mass));
+                uniforms.push(ModelUniform::new(
+                    model_matrix.into(),
+                    0,
+                    params.time,
+                    1.0,
+                    *mass,
+                ));
                 draw_calls.push((idx * MODEL_UNIFORM_SIZE as u32, 0));
             }
 
             // 4.5 预览天体（闪烁）
-            if let Some((pos, mass)) = preview_body {
-                let blink = (time * 4.0).sin() * 0.5 + 0.5;
+            if let Some((pos, mass)) = params.preview_body {
+                let blink = (params.time * 4.0).sin() * 0.5 + 0.5;
                 let alpha = 0.3 + blink * 0.6;
                 let scale = mass.powf(0.4) * 0.8;
                 let idx = uniforms.len() as u32;
                 let m = Matrix4::new_scaling(scale);
-                let model_matrix = Matrix4::new_translation(&Vector3::new(pos[0], pos[1], pos[2])) * m;
-                uniforms.push(ModelUniform::new(model_matrix.into(), 4, time, alpha, 0.0));
+                let model_matrix =
+                    Matrix4::new_translation(&Vector3::new(pos[0], pos[1], pos[2])) * m;
+                uniforms.push(ModelUniform::new(
+                    model_matrix.into(),
+                    4,
+                    params.time,
+                    alpha,
+                    0.0,
+                ));
                 draw_calls.push((idx * MODEL_UNIFORM_SIZE as u32, 4));
             }
 
             // 4.6 预览黑洞（闪烁）
-            if let Some((pos, mass)) = preview_black_hole {
-                let blink = (time * 4.0 + 1.0).sin() * 0.5 + 0.5;
+            if let Some((pos, mass)) = params.preview_black_hole {
+                let blink = (params.time * 4.0 + 1.0).sin() * 0.5 + 0.5;
                 let alpha = 0.4 + blink * 0.6;
                 let idx = uniforms.len() as u32;
                 let event_horizon_r = 2.0 * mass;
                 let m = Matrix4::new_scaling(event_horizon_r);
                 let model_matrix = Matrix4::new_translation(&pos) * m;
-                uniforms.push(ModelUniform::new(model_matrix.into(), 0, time, alpha, mass));
+                uniforms.push(ModelUniform::new(
+                    model_matrix.into(),
+                    0,
+                    params.time,
+                    alpha,
+                    mass,
+                ));
                 draw_calls.push((idx * MODEL_UNIFORM_SIZE as u32, 0));
             }
 
@@ -1463,10 +1523,8 @@ impl Renderer {
                 render_pass.set_bind_group(0, &self.bind_group, &[0]);
                 render_pass.set_vertex_buffer(0, self.quad_vertices.slice(..));
                 render_pass.set_vertex_buffer(1, self.debris_instance_buffer.slice(..));
-                render_pass.set_index_buffer(
-                    self.quad_indices.slice(..),
-                    wgpu::IndexFormat::Uint16,
-                );
+                render_pass
+                    .set_index_buffer(self.quad_indices.slice(..), wgpu::IndexFormat::Uint16);
                 render_pass.draw_indexed(0..self.quad_index_count, 0, 0..debris_count);
             }
 
@@ -1476,10 +1534,8 @@ impl Renderer {
                 render_pass.set_bind_group(0, &self.bind_group, &[0]);
                 render_pass.set_vertex_buffer(0, self.quad_vertices.slice(..));
                 render_pass.set_vertex_buffer(1, self.trail_instance_buffer.slice(..));
-                render_pass.set_index_buffer(
-                    self.quad_indices.slice(..),
-                    wgpu::IndexFormat::Uint16,
-                );
+                render_pass
+                    .set_index_buffer(self.quad_indices.slice(..), wgpu::IndexFormat::Uint16);
                 render_pass.draw_indexed(0..self.quad_index_count, 0, 0..trail_count);
             }
         }

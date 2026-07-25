@@ -63,7 +63,7 @@ impl OrbitCamera {
     /// 绕局部 X 轴旋转（右乘）
     pub fn rotate_pitch(&mut self, angle: f32) {
         let q_pitch = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), angle);
-        self.orientation = self.orientation * q_pitch;
+        self.orientation *= q_pitch;
     }
 
     /// 平移目标点（在相机的局部坐标系中）

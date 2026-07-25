@@ -3,6 +3,8 @@
 
 use nalgebra::Vector3;
 
+pub type TrailData = (Vec<Vec<Vector3<f32>>>, Vec<Vec<Vector3<f32>>>);
+
 /// 单个黑洞
 #[derive(Clone, Debug)]
 pub struct BlackHole {
@@ -48,7 +50,7 @@ pub struct Simulation {
     pub show_gravity_waves: bool,
     pub sim_speed: f32,
     pub paused: bool,
-    pub wave_accum: f32,
+    pub _wave_accum: f32,
 }
 
 const G: f32 = 1.0;
@@ -72,7 +74,7 @@ impl Simulation {
             show_gravity_waves: false,
             sim_speed: 0.5,
             paused: false,
-            wave_accum: 0.0,
+            _wave_accum: 0.0,
         }
     }
 
@@ -137,7 +139,7 @@ impl Simulation {
     /// 忽略碰撞/撕裂/事件视界吸收等非线性事件，只保留引力轨道
     /// steps: 总模拟步数，dt_per_step: 每步时间
     /// 返回 (黑洞轨迹, 天体轨迹)，每个是 Vec<Vec<Vector3>>（每条轨迹按时间排序的点列）
-    pub fn predict_trajectories(&self, steps: usize, dt_per_step: f32) -> (Vec<Vec<Vector3<f32>>>, Vec<Vec<Vector3<f32>>>) {
+    pub fn predict_trajectories(&self, steps: usize, dt_per_step: f32) -> TrailData {
         // 克隆黑洞和天体
         let mut bhs: Vec<BlackHole> = self.black_holes.clone();
         let mut bodies: Vec<CelestialBody> = self.bodies.clone();
@@ -150,11 +152,11 @@ impl Simulation {
         let mut body_trails: Vec<Vec<Vector3<f32>>> = vec![Vec::new(); n_body];
 
         // 记录初始位置
-        for i in 0..n_bh {
-            bh_trails[i].push(bhs[i].pos);
+        for (trail, bh) in bh_trails.iter_mut().zip(bhs.iter()) {
+            trail.push(bh.pos);
         }
-        for i in 0..n_body {
-            body_trails[i].push(bodies[i].pos);
+        for (trail, body) in body_trails.iter_mut().zip(bodies.iter()) {
+            trail.push(body.pos);
         }
 
         for step in 1..=steps {
@@ -186,25 +188,25 @@ impl Simulation {
             }
 
             // --- 更新天体（受黑洞引力）---
-            for i in 0..n_body {
+            for body in &mut bodies {
                 let mut acc = Vector3::zeros();
                 for bh in &bhs {
-                    let delta = bh.pos - bodies[i].pos;
+                    let delta = bh.pos - body.pos;
                     let r = delta.norm().max(0.1);
                     acc += delta / r * G * bh.mass / (r * r);
                 }
-                bodies[i].vel += acc * dt_per_step;
-                let v = bodies[i].vel;
-                bodies[i].pos += v * dt_per_step;
+                body.vel += acc * dt_per_step;
+                let v = body.vel;
+                body.pos += v * dt_per_step;
             }
 
             // 每秒采样一次
             if step % sample_interval == 0 {
-                for i in 0..n_bh {
-                    bh_trails[i].push(bhs[i].pos);
+                for (trail, bh) in bh_trails.iter_mut().zip(bhs.iter()) {
+                    trail.push(bh.pos);
                 }
-                for i in 0..n_body {
-                    body_trails[i].push(bodies[i].pos);
+                for (trail, body) in body_trails.iter_mut().zip(bodies.iter()) {
+                    trail.push(body.pos);
                 }
             }
         }
@@ -213,7 +215,12 @@ impl Simulation {
     }
 
     /// 轨迹预测（包含额外的假设天体），用于添加天体时预览
-    pub fn predict_trajectories_with_body(&self, extra_body: &CelestialBody, steps: usize, dt_per_step: f32) -> (Vec<Vec<Vector3<f32>>>, Vec<Vec<Vector3<f32>>>) {
+    pub fn predict_trajectories_with_body(
+        &self,
+        extra_body: &CelestialBody,
+        steps: usize,
+        dt_per_step: f32,
+    ) -> TrailData {
         let mut bhs: Vec<BlackHole> = self.black_holes.clone();
         let mut bodies: Vec<CelestialBody> = self.bodies.clone();
         bodies.push(extra_body.clone());
@@ -225,11 +232,11 @@ impl Simulation {
         let mut bh_trails: Vec<Vec<Vector3<f32>>> = vec![Vec::new(); n_bh];
         let mut body_trails: Vec<Vec<Vector3<f32>>> = vec![Vec::new(); n_body];
 
-        for i in 0..n_bh {
-            bh_trails[i].push(bhs[i].pos);
+        for (trail, bh) in bh_trails.iter_mut().zip(bhs.iter()) {
+            trail.push(bh.pos);
         }
-        for i in 0..n_body {
-            body_trails[i].push(bodies[i].pos);
+        for (trail, body) in body_trails.iter_mut().zip(bodies.iter()) {
+            trail.push(body.pos);
         }
 
         for step in 1..=steps {
@@ -246,37 +253,36 @@ impl Simulation {
                     }
                 }
                 let mut new_vels = Vec::with_capacity(n_bh);
-                for i in 0..n_bh {
-                    new_vels.push(bhs[i].vel + accs[i] * dt_per_step);
+                for (bh, acc) in bhs.iter().zip(accs.iter()) {
+                    new_vels.push(bh.vel + acc * dt_per_step);
                 }
-                for i in 0..n_bh {
-                    bhs[i].vel = new_vels[i];
-                    let v = new_vels[i];
-                    bhs[i].pos += v * dt_per_step;
+                for (bh, v) in bhs.iter_mut().zip(new_vels.iter()) {
+                    bh.vel = *v;
+                    bh.pos += *v * dt_per_step;
                 }
             } else if n_bh == 1 {
                 let v = bhs[0].vel;
                 bhs[0].pos += v * dt_per_step;
             }
 
-            for i in 0..n_body {
+            for body in &mut bodies {
                 let mut acc = Vector3::zeros();
                 for bh in &bhs {
-                    let delta = bh.pos - bodies[i].pos;
+                    let delta = bh.pos - body.pos;
                     let r = delta.norm().max(0.1);
                     acc += delta / r * G * bh.mass / (r * r);
                 }
-                bodies[i].vel += acc * dt_per_step;
-                let v = bodies[i].vel;
-                bodies[i].pos += v * dt_per_step;
+                body.vel += acc * dt_per_step;
+                let v = body.vel;
+                body.pos += v * dt_per_step;
             }
 
             if step % sample_interval == 0 {
-                for i in 0..n_bh {
-                    bh_trails[i].push(bhs[i].pos);
+                for (trail, bh) in bh_trails.iter_mut().zip(bhs.iter()) {
+                    trail.push(bh.pos);
                 }
-                for i in 0..n_body {
-                    body_trails[i].push(bodies[i].pos);
+                for (trail, body) in body_trails.iter_mut().zip(bodies.iter()) {
+                    trail.push(body.pos);
                 }
             }
         }
@@ -285,7 +291,12 @@ impl Simulation {
     }
 
     /// 轨迹预测（包含额外的假设黑洞），用于添加黑洞时预览
-    pub fn predict_trajectories_with_black_hole(&self, extra_bh: &BlackHole, steps: usize, dt_per_step: f32) -> (Vec<Vec<Vector3<f32>>>, Vec<Vec<Vector3<f32>>>) {
+    pub fn predict_trajectories_with_black_hole(
+        &self,
+        extra_bh: &BlackHole,
+        steps: usize,
+        dt_per_step: f32,
+    ) -> TrailData {
         let mut bhs: Vec<BlackHole> = self.black_holes.clone();
         bhs.push(extra_bh.clone());
         let mut bodies: Vec<CelestialBody> = self.bodies.clone();
@@ -297,11 +308,11 @@ impl Simulation {
         let mut bh_trails: Vec<Vec<Vector3<f32>>> = vec![Vec::new(); n_bh];
         let mut body_trails: Vec<Vec<Vector3<f32>>> = vec![Vec::new(); n_body];
 
-        for i in 0..n_bh {
-            bh_trails[i].push(bhs[i].pos);
+        for (trail, bh) in bh_trails.iter_mut().zip(bhs.iter()) {
+            trail.push(bh.pos);
         }
-        for i in 0..n_body {
-            body_trails[i].push(bodies[i].pos);
+        for (trail, body) in body_trails.iter_mut().zip(bodies.iter()) {
+            trail.push(body.pos);
         }
 
         for step in 1..=steps {
@@ -318,37 +329,36 @@ impl Simulation {
                     }
                 }
                 let mut new_vels = Vec::with_capacity(n_bh);
-                for i in 0..n_bh {
-                    new_vels.push(bhs[i].vel + accs[i] * dt_per_step);
+                for (bh, acc) in bhs.iter().zip(accs.iter()) {
+                    new_vels.push(bh.vel + acc * dt_per_step);
                 }
-                for i in 0..n_bh {
-                    bhs[i].vel = new_vels[i];
-                    let v = new_vels[i];
-                    bhs[i].pos += v * dt_per_step;
+                for (bh, v) in bhs.iter_mut().zip(new_vels.iter()) {
+                    bh.vel = *v;
+                    bh.pos += *v * dt_per_step;
                 }
             } else if n_bh == 1 {
                 let v = bhs[0].vel;
                 bhs[0].pos += v * dt_per_step;
             }
 
-            for i in 0..n_body {
+            for body in &mut bodies {
                 let mut acc = Vector3::zeros();
                 for bh in &bhs {
-                    let delta = bh.pos - bodies[i].pos;
+                    let delta = bh.pos - body.pos;
                     let r = delta.norm().max(0.1);
                     acc += delta / r * G * bh.mass / (r * r);
                 }
-                bodies[i].vel += acc * dt_per_step;
-                let v = bodies[i].vel;
-                bodies[i].pos += v * dt_per_step;
+                body.vel += acc * dt_per_step;
+                let v = body.vel;
+                body.pos += v * dt_per_step;
             }
 
             if step % sample_interval == 0 {
-                for i in 0..n_bh {
-                    bh_trails[i].push(bhs[i].pos);
+                for (trail, bh) in bh_trails.iter_mut().zip(bhs.iter()) {
+                    trail.push(bh.pos);
                 }
-                for i in 0..n_body {
-                    body_trails[i].push(bodies[i].pos);
+                for (trail, body) in body_trails.iter_mut().zip(bodies.iter()) {
+                    trail.push(body.pos);
                 }
             }
         }
@@ -391,17 +401,17 @@ impl Simulation {
         }
 
         let mut new_vels = Vec::with_capacity(n);
-        for i in 0..n {
-            new_vels.push(self.black_holes[i].vel + accelerations[i] * dt);
+        for (bh, acc) in self.black_holes.iter().zip(accelerations.iter()) {
+            new_vels.push(bh.vel + acc * dt);
         }
-        for i in 0..n {
-            self.black_holes[i].vel = new_vels[i];
-            self.black_holes[i].pos += new_vels[i] * dt;
+        for (bh, v) in self.black_holes.iter_mut().zip(new_vels.iter()) {
+            bh.vel = *v;
+            bh.pos += *v * dt;
         }
     }
 
     fn update_bodies(&mut self, dt: f32) {
-        let n_bh = self.black_holes.len();
+        let _n_bh = self.black_holes.len();
         let n_body = self.bodies.len();
         if n_body == 0 {
             return;
@@ -410,34 +420,34 @@ impl Simulation {
         let mut accelerations: Vec<Vector3<f32>> = vec![Vector3::zeros(); n_body];
 
         // 天体受所有黑洞引力
-        for i in 0..n_body {
+        for (i, body) in self.bodies.iter().enumerate() {
             for bh in &self.black_holes {
-                let delta = bh.pos - self.bodies[i].pos;
+                let delta = bh.pos - body.pos;
                 let r = delta.norm().max(0.1);
                 let dir = delta / r;
                 let force_mag = G * bh.mass / (r * r);
                 accelerations[i] += dir * force_mag;
             }
             // 天体之间也有微弱引力
-            for j in 0..n_body {
+            for (j, other) in self.bodies.iter().enumerate() {
                 if i == j {
                     continue;
                 }
-                let delta = self.bodies[j].pos - self.bodies[i].pos;
+                let delta = other.pos - body.pos;
                 let r = delta.norm().max(0.1);
                 let dir = delta / r;
-                let force_mag = G * self.bodies[j].mass / (r * r);
+                let force_mag = G * other.mass / (r * r);
                 accelerations[i] += dir * force_mag * 0.1;
             }
         }
 
         let mut new_vels = Vec::with_capacity(n_body);
-        for i in 0..n_body {
-            new_vels.push(self.bodies[i].vel + accelerations[i] * dt);
+        for (body, acc) in self.bodies.iter().zip(accelerations.iter()) {
+            new_vels.push(body.vel + acc * dt);
         }
-        for i in 0..n_body {
-            self.bodies[i].vel = new_vels[i];
-            self.bodies[i].pos += new_vels[i] * dt;
+        for (body, v) in self.bodies.iter_mut().zip(new_vels.iter()) {
+            body.vel = *v;
+            body.pos += *v * dt;
         }
     }
 
@@ -450,9 +460,9 @@ impl Simulation {
         let mut accelerations: Vec<Vector3<f32>> = vec![Vector3::zeros(); n];
 
         // 碎片受所有黑洞引力
-        for i in 0..n {
+        for (i, debris) in self.debris.iter().enumerate() {
             for bh in &self.black_holes {
-                let delta = bh.pos - self.debris[i].pos;
+                let delta = bh.pos - debris.pos;
                 let r = delta.norm().max(0.1);
                 let dir = delta / r;
                 let force_mag = G * bh.mass / (r * r);
@@ -461,14 +471,14 @@ impl Simulation {
         }
 
         let mut new_vels = Vec::with_capacity(n);
-        for i in 0..n {
-            new_vels.push(self.debris[i].vel + accelerations[i] * dt);
+        for (debris, acc) in self.debris.iter().zip(accelerations.iter()) {
+            new_vels.push(debris.vel + acc * dt);
         }
 
-        for i in 0..n {
-            self.debris[i].vel = new_vels[i];
-            self.debris[i].pos += new_vels[i] * dt;
-            self.debris[i].life += dt;
+        for (debris, v) in self.debris.iter_mut().zip(new_vels.iter()) {
+            debris.vel = *v;
+            debris.pos += *v * dt;
+            debris.life += dt;
         }
 
         // 移除落入事件视界的碎片
@@ -505,9 +515,11 @@ impl Simulation {
                     let m1 = self.black_holes[i].mass;
                     let m2 = self.black_holes[j].mass;
                     let total_mass = m1 + m2;
-                    let total_momentum = m1 * self.black_holes[i].vel + m2 * self.black_holes[j].vel;
+                    let total_momentum =
+                        m1 * self.black_holes[i].vel + m2 * self.black_holes[j].vel;
                     let new_vel = total_momentum / total_mass;
-                    let new_pos = (m1 * self.black_holes[i].pos + m2 * self.black_holes[j].pos) / total_mass;
+                    let new_pos =
+                        (m1 * self.black_holes[i].pos + m2 * self.black_holes[j].pos) / total_mass;
 
                     if self.show_gravity_waves {
                         self.waves.push(GravityWave {
@@ -602,10 +614,8 @@ impl Simulation {
                     let hardness = (self.bodies[i].hardness + self.bodies[j].hardness) * 0.5;
                     let q_star = Self::critical_disruption_energy(m_tot, hardness);
 
-                    let collision_pos =
-                        (m1 * self.bodies[i].pos + m2 * self.bodies[j].pos) / m_tot;
-                    let collision_vel =
-                        (m1 * self.bodies[i].vel + m2 * self.bodies[j].vel) / m_tot;
+                    let collision_pos = (m1 * self.bodies[i].pos + m2 * self.bodies[j].pos) / m_tot;
+                    let collision_vel = (m1 * self.bodies[i].vel + m2 * self.bodies[j].vel) / m_tot;
 
                     if q < q_star * 0.5 {
                         // 撞击能量不足：合并为更大的天体（吸积）
@@ -619,8 +629,7 @@ impl Simulation {
                         // 碎裂：产生碎片
                         let ratio = q / q_star;
                         // 碎片数量：与能量比和硬度成正比
-                        let num_fragments =
-                            ((ratio * 15.0 * hardness) as usize).clamp(8, 80);
+                        let num_fragments = ((ratio * 15.0 * hardness) as usize).clamp(8, 80);
 
                         // 碰撞法线方向
                         let normal = if dist > 0.01 {
@@ -638,8 +647,7 @@ impl Simulation {
                         let tangent2 = normal.cross(&tangent1).normalize();
 
                         for k in 0..num_fragments {
-                            let angle = (k as f32 / num_fragments as f32)
-                                * std::f32::consts::TAU;
+                            let angle = (k as f32 / num_fragments as f32) * std::f32::consts::TAU;
                             let pitch = ((k as f32 % 5.0) - 2.0) * 0.3;
                             let spread = 0.5 + (k as f32 % 7.0) * 0.15;
 
@@ -728,7 +736,7 @@ impl Simulation {
         }
 
         // 从后往前删除，避免索引错位
-        for (bi, bhi, bh_pos) in to_disrupt.iter().rev() {
+        for (bi, bhi, _bh_pos) in to_disrupt.iter().rev() {
             let body = self.bodies.remove(*bi);
             // 克隆 BlackHole 以避免与 &mut self 的借用冲突
             let bh = self.black_holes[*bhi].clone();
@@ -770,7 +778,9 @@ impl Simulation {
 
             // 轨道速度（开普勒速度）
             let orb_v = (G * bh.mass / orbit_r).sqrt();
-            let vel_dir = orbital_plane_normal.cross(&(bh.pos - particle_pos)).normalize();
+            let vel_dir = orbital_plane_normal
+                .cross(&(bh.pos - particle_pos))
+                .normalize();
             let particle_vel = body.vel * 0.3 + vel_dir * orb_v + pos_offset.normalize() * 0.1;
 
             if self.debris.len() < MAX_DEBRIS {

@@ -100,7 +100,7 @@ pub fn create_sphere(radius: f32, sectors: u32, stacks: u32) -> (Vec<Vertex>, Ve
 /// - inner: 内半径
 /// - outer: 外半径
 /// - segments: 分段数
-/// uv.x 从 0（内）到 1（外），uv.y 沿圆周方向
+///   uv.x 从 0（内）到 1（外），uv.y 沿圆周方向
 pub fn create_ring(inner: f32, outer: f32, segments: u32) -> (Vec<Vertex>, Vec<u32>) {
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
