@@ -28,7 +28,9 @@ The simulation uses **Tendex lines** to visualize spacetime curvature, based on 
 
 The "electric" part of the curvature tensor $E_{jk}$ describes tidal stretching/compression. In the Newtonian limit:
 
-$$ E_{jk} = \sum_i \frac{GM_i}{r_i^3} \left( 3 n_j n_k - \delta_{jk} \right) $$
+$$
+E_{jk} = \sum_i \frac{GM_i}{r_i^3} \left( 3 n_j n_k - \delta_{jk} \right)
+$$
 
 where $\mathbf{n} = \mathbf{r}/r$ is the unit vector from the mass source to the field point.
 
@@ -36,7 +38,7 @@ At each spatial sample point, we compute the three eigenvalues and eigenvectors 
 
 - **Red lines**: positive eigenvalue direction (tidal **stretching**)
 - **Blue lines**: negative eigenvalue direction (tidal **compression**)
-- Line length: fixed at $\frac{2}{3} \times \text{grid\_spacing}$ (1/3 on each side, leaving 1/3 gap between adjacent grid points)
+- Line length: fixed at $\frac{2}{3} \times \text{grid spacing}$ (1/3 on each side, leaving 1/3 gap between adjacent grid points)
 - Line thickness and opacity: modulated by $\sqrt{|\lambda|}$ (intensity), so stronger tidal forces produce thicker, brighter lines
 
 Since $E_{jk}$ is traceless ($\text{tr}(E) = 0$), the three eigenvalues sum to zero; stretching and compression directions are complementary.
@@ -50,17 +52,27 @@ Since $E_{jk}$ is traceless ($\text{tr}(E) = 0$), the three eigenvalues sum to z
 Binary systems lose orbital energy to gravitational wave radiation, causing inspiral and eventual merger. Based on the classic Peters (1964) formula:
 
 **Energy loss rate**:
-$$ \frac{dE}{dt} = -\frac{32}{5} \frac{G^4 \mu^2 M^3}{c^5 a^5} $$
+$$
+\frac{dE}{dt} = -\frac{32}{5} \frac{G^4 \mu^2 M^3}{c^5 a^5}
+$$
 
 **Semi-major axis decay rate**:
-$$ \frac{da}{dt} = -\frac{64}{5} \frac{G^3 \mu M^2}{c^5 a^3} $$
+$$
+\frac{da}{dt} = -\frac{64}{5} \frac{G^3 \mu M^2}{c^5 a^3}
+$$
 
 **Equivalent relative drag acceleration** (natural units G=c=1):
-$$ \mathbf{a}_{\text{rad}} = -\frac{32}{5} \frac{\mu M^2}{r^4} \mathbf{v}_{\text{rel}} $$
+$$
+\mathbf{a}_{\text{rad}} = -\frac{32}{5} \frac{\mu M^2}{r^4} \mathbf{v}_{\text{rel}}
+$$
 
 Split to two bodies (center-of-mass frame, accelerations are Galilean-invariant):
-$$ \mathbf{a}_i = +\frac{32}{5} \frac{m_i m_j^2}{r^4} \mathbf{v}_{\text{rel}} $$
-$$ \mathbf{a}_j = -\frac{32}{5} \frac{m_i^2 m_j}{r^4} \mathbf{v}_{\text{rel}} $$
+$$
+\mathbf{a}_i = +\frac{32}{5} \frac{m_i m_j^2}{r^4} \mathbf{v}_{\text{rel}}
+$$
+$$
+\mathbf{a}_j = -\frac{32}{5} \frac{m_i^2 m_j}{r^4} \mathbf{v}_{\text{rel}}
+$$
 
 where $\mu = m_i m_j / (m_i + m_j)$ is the reduced mass, $M = m_i + m_j$ is the total mass, $r$ is the separation, and $\mathbf{v}_{\text{rel}} = \mathbf{v}_j - \mathbf{v}_i$ is the relative velocity.
 
@@ -74,7 +86,9 @@ Binary black hole inspiral ends at the **ISCO (Innermost Stable Circular Orbit)*
 
 **ISCO criterion** (Blanchet & Iyer 2003, 3PN):
 
-$$ C_{\text{ISCO}}^{3\text{PN}} = 1 - 6x + 14\nu x^2 + \nu\left[\frac{397}{2} - \frac{123}{16}\pi^2 - 14\nu\right] x^3 = 0 $$
+$$
+C_{\text{ISCO}}^{3\text{PN}} = 1 - 6x + 14\nu x^2 + \nu\left[\frac{397}{2} - \frac{123}{16}\pi^2 - 14\nu\right] x^3 = 0
+$$
 
 where $x = (G M \Omega / c^3)^{2/3}$ is the PN parameter, $\nu = \mu/M$ is the symmetric mass ratio.
 
@@ -91,19 +105,27 @@ Physically, ISCO ≈ $3(r_{s1}+r_{s2})$ is the inspiral endpoint; here we contin
 
 Isolated Schwarzschild black hole photon sphere radius and critical impact parameter:
 
-$$ r_{\text{ph}} = \frac{3GM}{c^2} = \frac{3}{2} r_s, \quad b_c = 3\sqrt{3} \frac{GM}{c^2} \approx 5.196 M $$
+$$
+r_{\text{ph}} = \frac{3GM}{c^2} = \frac{3}{2} r_s, \quad b_c = 3\sqrt{3} \frac{GM}{c^2} \approx 5.196 M
+$$
 
 **Companion perturbation** (Erdl & Schneider 1993; Patil et al. 2016 arXiv:1610.04863; Cunha et al. 2018 arXiv:1805.03798):
 
 Let the primary black hole have mass $M$, the companion have mass $M'$ at distance $D$ in direction $\hat{n}$. In the weak-perturbation limit ($D \gtrsim 10M$), the critical impact parameter becomes:
 
-$$ b_c \approx 3\sqrt{3} M \left( 1 + \delta_{\text{mono}} + \delta_{\text{tidal}} \right) $$
+$$
+b_c \approx 3\sqrt{3} M \left( 1 + \delta_{\text{mono}} + \delta_{\text{tidal}} \right)
+$$
 
 **Monopole perturbation** (overall compression):
-$$ \delta_{\text{mono}} = -\kappa_1 \frac{M'}{D} $$
+$$
+\delta_{\text{mono}} = -\kappa_1 \frac{M'}{D}
+$$
 
 **Quadrupole tidal perturbation** (angle-dependent deformation):
-$$ \delta_{\text{tidal}} = \kappa_2 \frac{M'}{M} \left(\frac{M}{D}\right)^2 P_2(\cos\theta) $$
+$$
+\delta_{\text{tidal}} = \kappa_2 \frac{M'}{M} \left(\frac{M}{D}\right)^2 P_2(\cos\theta)
+$$
 
 where $P_2(\cos\theta) = \frac{1}{2}(3\cos^2\theta - 1)$ is the second Legendre polynomial, $\theta$ is the angle between the ray direction and the companion direction.
 
@@ -115,19 +137,27 @@ where $P_2(\cos\theta) = \frac{1}{2}(3\cos^2\theta - 1)$ is the second Legendre 
 
 **Standard GR result**: gravitational waves propagate exactly at the speed of light $c$ (Einstein 1916, 1918). Wave equation:
 
-$$ \Box h_{\mu\nu} = -\frac{16\pi G}{c^4} T_{\mu\nu}, \quad \Box = -\partial_t^2 + c^2 \nabla^2 $$
+$$
+\Box h_{\mu\nu} = -\frac{16\pi G}{c^4} T_{\mu\nu}, \quad \Box = -\partial_t^2 + c^2 \nabla^2
+$$
 
 **Observational constraint** (GW170817/GRB 170817A, Abbott et al. 2017):
 
-$$ -3 \times 10^{-15} \leq \frac{v_{\text{gw}} - c}{c} \leq +7 \times 10^{-16} $$
+$$
+-3 \times 10^{-15} \leq \frac{v_{\text{gw}} - c}{c} \leq +7 \times 10^{-16}
+$$
 
 **Retarded time** (Blanchet 2014, Eq. 219):
 
-$$ t_{\text{ret}} = t_{\text{obs}} - \frac{|\mathbf{x}_{\text{obs}} - \mathbf{x}_{\text{source}}|}{c} $$
+$$
+t_{\text{ret}} = t_{\text{obs}} - \frac{|\mathbf{x}_{\text{obs}} - \mathbf{x}_{\text{source}}|}{c}
+$$
 
 The radiative field at observation point $(t, \mathbf{x})$ is determined by the source state at $t_{\text{ret}}$:
 
-$$ h_{ij}^{\text{TT}}(t, \mathbf{x}) = \frac{2G}{c^4 R} \Lambda_{ij,kl}(\hat{N}) \frac{d^2 I_{kl}}{dt^2}(t_{\text{ret}}) $$
+$$
+h_{ij}^{\text{TT}}(t, \mathbf{x}) = \frac{2G}{c^4 R} \Lambda_{ij,kl}(\hat{N}) \frac{d^2 I_{kl}}{dt^2}(t_{\text{ret}})
+$$
 
 **Near-field vs. radiative field** (2.5PN expansion structure):
 
@@ -147,17 +177,23 @@ In this simulator:
 
 **Roche limit** (Rees 1988, Hills 1975):
 
-$$ d_{\text{Roche}} = R_{\text{body}} \left( \frac{2 M_{\text{bh}}}{M_{\text{body}}} \right)^{1/3} $$
+$$
+d_{\text{Roche}} = R_{\text{body}} \left( \frac{2 M_{\text{bh}}}{M_{\text{body}}} \right)^{1/3}
+$$
 
 **Condition for disruption outside horizon**: $d_{\text{Roche}} > r_s = 2GM_{\text{bh}}/c^2$
 
 Equivalently, a density criterion:
 
-$$ \rho_{\text{body}} < \rho_{\text{BH}} = \frac{3 M_{\text{bh}}}{4\pi r_s^3} = \frac{3 c^6}{32\pi G^3 M_{\text{bh}}^2} $$
+$$
+\rho_{\text{body}} < \rho_{\text{BH}} = \frac{3 M_{\text{bh}}}{4\pi r_s^3} = \frac{3 c^6}{32\pi G^3 M_{\text{bh}}^2}
+$$
 
 **Hills mass** $M_H$: for Sun-like stars ($M_\odot, R_\odot$):
 
-$$ M_H \approx 1.08 \times 10^8 M_\odot \quad \text{(Schwarzschild)} $$
+$$
+M_H \approx 1.08 \times 10^8 M_\odot \quad \text{(Schwarzschild)}
+$$
 
 - $M_{\text{bh}} < M_H$: Sun-like stars are disrupted outside the horizon (producing tidal disruption events, TDEs)
 - $M_{\text{bh}} > M_H$: stars cross the horizon intact and are swallowed whole
@@ -173,28 +209,44 @@ $$ M_H \approx 1.08 \times 10^8 M_\odot \quad \text{(Schwarzschild)} $$
 
 Implements both plus (+) and cross (×) polarization modes (Maggiore 2008):
 
-$$ h_+ = h_0 \cdot \frac{1 + \cos^2\iota}{2} \cdot \cos(\Phi) $$
-$$ h_\times = h_0 \cdot \cos\iota \cdot \sin(\Phi) $$
+$$
+h_+ = h_0 \cdot \frac{1 + \cos^2\iota}{2} \cdot \cos(\Phi)
+$$
+$$
+h_\times = h_0 \cdot \cos\iota \cdot \sin(\Phi)
+$$
 
 where $\iota$ is the inclination of the observer relative to the orbital plane, $\Phi$ is the gravitational wave phase.
 
 **Chirp mass**:
 
-$$ M_c = \frac{(m_1 m_2)^{3/5}}{(m_1 + m_2)^{1/5}}, \quad h_0 = \frac{4 M_c^{5/3} \omega^{2/3}}{D} $$
+$$
+M_c = \frac{(m_1 m_2)^{3/5}}{(m_1 + m_2)^{1/5}}, \quad h_0 = \frac{4 M_c^{5/3} \omega^{2/3}}{D}
+$$
 
 **TT-gauge strain tensor** (with polarization angle $\psi$ rotation):
 
-$$ h_{\theta\theta} = h_+ \cos 2\psi - h_\times \sin 2\psi $$
-$$ h_{\phi\phi} = -h_+ \cos 2\psi - h_\times \sin 2\psi $$
-$$ h_{\theta\phi} = h_+ \sin 2\psi + h_\times \cos 2\psi $$
+$$
+h_{\theta\theta} = h_+ \cos 2\psi - h_\times \sin 2\psi
+$$
+$$
+h_{\phi\phi} = -h_+ \cos 2\psi - h_\times \sin 2\psi
+$$
+$$
+h_{\theta\phi} = h_+ \sin 2\psi + h_\times \cos 2\psi
+$$
 
 ### 8. Linearized Gravity and Superposition
 
-$$ g_{\mu\nu} = \eta_{\mu\nu} + h_{\mu\nu}, \quad |h_{\mu\nu}| \ll 1 $$
+$$
+g_{\mu\nu} = \eta_{\mu\nu} + h_{\mu\nu}, \quad |h_{\mu\nu}| \ll 1
+$$
 
 In the weak-field limit, curvature tensors from multiple sources **superpose linearly**:
 
-$$ E_{jk}^{\text{total}} = \sum_{i=1}^{N_{\text{bodies}}} E_{jk}^{(i)} + E_{jk}^{\text{GW}} $$
+$$
+E_{jk}^{\text{total}} = \sum_{i=1}^{N_{\text{bodies}}} E_{jk}^{(i)} + E_{jk}^{\text{GW}}
+$$
 
 All mass sources (black holes and ordinary bodies) produce tidal effects, superposed with the dynamic gravitational wave oscillation.
 

@@ -27,14 +27,16 @@
 
 曲率张量的"电"部分 $E_{jk}$ 描述潮汐拉伸/压缩效应。在牛顿极限下：
 
-$$ E_{jk} = \sum_i \frac{GM_i}{r_i^3} \left( 3 n_j n_k - \delta_{jk} \right) $$
+$$
+E_{jk} = \sum_i \frac{GM_i}{r_i^3} \left( 3 n_j n_k - \delta_{jk} \right)
+$$
 
 其中 $\mathbf{n} = \mathbf{r}/r$ 是从质量源指向场点的单位向量。
 
 在每个空间采样点，计算 $E_{jk}$ 的三个特征值和特征向量：
 - **红色线**：正特征值方向（潮汐**拉伸**）
 - **蓝色线**：负特征值方向（潮汐**压缩**）
-- 线长：固定为 $\frac{2}{3} \times \text{grid\_spacing}$（每侧伸出 1/3，相邻格点间留 1/3 空隙）
+- 线长：固定为 $\frac{2}{3} \times \text{grid spacing}$（每侧伸出 1/3，相邻格点间留 1/3 空隙）
 - 线宽与不透明度：由 $\sqrt{|\lambda|}$（强度）调制，潮汐力越强则线越粗、越亮
 
 由于 $E_{jk}$ 是无迹的（$\text{tr}(E) = 0$），三个特征值之和为零，拉伸和压缩方向互补。
@@ -48,17 +50,27 @@ $$ E_{jk} = \sum_i \frac{GM_i}{r_i^3} \left( 3 n_j n_k - \delta_{jk} \right) $$
 双星系统因引力波辐射损失轨道能量，导致旋进 (inspiral) 并最终合并。基于 Peters (1964) 经典公式：
 
 **能量损失率**：
-$$ \frac{dE}{dt} = -\frac{32}{5} \frac{G^4 \mu^2 M^3}{c^5 a^5} $$
+$$
+\frac{dE}{dt} = -\frac{32}{5} \frac{G^4 \mu^2 M^3}{c^5 a^5}
+$$
 
 **半长轴变化率**：
-$$ \frac{da}{dt} = -\frac{64}{5} \frac{G^3 \mu M^2}{c^5 a^3} $$
+$$
+\frac{da}{dt} = -\frac{64}{5} \frac{G^3 \mu M^2}{c^5 a^3}
+$$
 
 **等效相对运动阻力加速度**（自然单位制 G=c=1）：
-$$ \mathbf{a}_{\text{rad}} = -\frac{32}{5} \frac{\mu M^2}{r^4} \mathbf{v}_{\text{rel}} $$
+$$
+\mathbf{a}_{\text{rad}} = -\frac{32}{5} \frac{\mu M^2}{r^4} \mathbf{v}_{\text{rel}}
+$$
 
 拆分到两体（质心系，伽利略变换下加速度不变）：
-$$ \mathbf{a}_i = +\frac{32}{5} \frac{m_i m_j^2}{r^4} \mathbf{v}_{\text{rel}} $$
-$$ \mathbf{a}_j = -\frac{32}{5} \frac{m_i^2 m_j}{r^4} \mathbf{v}_{\text{rel}} $$
+$$
+\mathbf{a}_i = +\frac{32}{5} \frac{m_i m_j^2}{r^4} \mathbf{v}_{\text{rel}}
+$$
+$$
+\mathbf{a}_j = -\frac{32}{5} \frac{m_i^2 m_j}{r^4} \mathbf{v}_{\text{rel}}
+$$
 
 其中 $\mu = m_i m_j / (m_i + m_j)$ 为约化质量，$M = m_i + m_j$ 为总质量，$r$ 为两体间距，$\mathbf{v}_{\text{rel}} = \mathbf{v}_j - \mathbf{v}_i$ 为相对速度。
 
@@ -72,7 +84,9 @@ $$ \mathbf{a}_j = -\frac{32}{5} \frac{m_i^2 m_j}{r^4} \mathbf{v}_{\text{rel}} $$
 
 **ISCO 判据** (Blanchet & Iyer 2003, 3PN)：
 
-$$ C_{\text{ISCO}}^{3\text{PN}} = 1 - 6x + 14\nu x^2 + \nu\left[\frac{397}{2} - \frac{123}{16}\pi^2 - 14\nu\right] x^3 = 0 $$
+$$
+C_{\text{ISCO}}^{3\text{PN}} = 1 - 6x + 14\nu x^2 + \nu\left[\frac{397}{2} - \frac{123}{16}\pi^2 - 14\nu\right] x^3 = 0
+$$
 
 其中 $x = (G M \Omega / c^3)^{2/3}$ 为 PN 参数，$\nu = \mu/M$ 为对称质量比。
 
@@ -89,19 +103,27 @@ $$ C_{\text{ISCO}}^{3\text{PN}} = 1 - 6x + 14\nu x^2 + \nu\left[\frac{397}{2} - 
 
 孤立 Schwarzschild 黑洞的光子球半径和临界碰撞参数：
 
-$$ r_{\text{ph}} = \frac{3GM}{c^2} = \frac{3}{2} r_s, \quad b_c = 3\sqrt{3} \frac{GM}{c^2} \approx 5.196 M $$
+$$
+r_{\text{ph}} = \frac{3GM}{c^2} = \frac{3}{2} r_s, \quad b_c = 3\sqrt{3} \frac{GM}{c^2} \approx 5.196 M
+$$
 
 **伴星扰动** (Erdl & Schneider 1993; Patil et al. 2016 arXiv:1610.04863; Cunha et al. 2018 arXiv:1805.03798)：
 
 设主黑洞质量 $M$，伴星质量 $M'$ 位于距离 $D$、方向 $\hat{n}$。在弱扰动极限 ($D \gtrsim 10M$)，临界碰撞参数变为：
 
-$$ b_c \approx 3\sqrt{3} M \left( 1 + \delta_{\text{mono}} + \delta_{\text{tidal}} \right) $$
+$$
+b_c \approx 3\sqrt{3} M \left( 1 + \delta_{\text{mono}} + \delta_{\text{tidal}} \right)
+$$
 
 **单极扰动**（整体压缩）：
-$$ \delta_{\text{mono}} = -\kappa_1 \frac{M'}{D} $$
+$$
+\delta_{\text{mono}} = -\kappa_1 \frac{M'}{D}
+$$
 
 **四极潮汐扰动**（角度相关变形）：
-$$ \delta_{\text{tidal}} = \kappa_2 \frac{M'}{M} \left(\frac{M}{D}\right)^2 P_2(\cos\theta) $$
+$$
+\delta_{\text{tidal}} = \kappa_2 \frac{M'}{M} \left(\frac{M}{D}\right)^2 P_2(\cos\theta)
+$$
 
 其中 $P_2(\cos\theta) = \frac{1}{2}(3\cos^2\theta - 1)$ 为二阶勒让德多项式，$\theta$ 为光线方向与伴星方向夹角。
 
@@ -113,19 +135,27 @@ $$ \delta_{\text{tidal}} = \kappa_2 \frac{M'}{M} \left(\frac{M}{D}\right)^2 P_2(
 
 **标准 GR 结果**：引力波严格以光速 $c$ 传播 (Einstein 1916, 1918)。波动方程：
 
-$$ \Box h_{\mu\nu} = -\frac{16\pi G}{c^4} T_{\mu\nu}, \quad \Box = -\partial_t^2 + c^2 \nabla^2 $$
+$$
+\Box h_{\mu\nu} = -\frac{16\pi G}{c^4} T_{\mu\nu}, \quad \Box = -\partial_t^2 + c^2 \nabla^2
+$$
 
 **观测约束** (GW170817/GRB 170817A, Abbott et al. 2017)：
 
-$$ -3 \times 10^{-15} \leq \frac{v_{\text{gw}} - c}{c} \leq +7 \times 10^{-16} $$
+$$
+-3 \times 10^{-15} \leq \frac{v_{\text{gw}} - c}{c} \leq +7 \times 10^{-16}
+$$
 
 **推迟时间** (Blanchet 2014, Eq. 219)：
 
-$$ t_{\text{ret}} = t_{\text{obs}} - \frac{|\mathbf{x}_{\text{obs}} - \mathbf{x}_{\text{source}}|}{c} $$
+$$
+t_{\text{ret}} = t_{\text{obs}} - \frac{|\mathbf{x}_{\text{obs}} - \mathbf{x}_{\text{source}}|}{c}
+$$
 
 辐射场在观测点 $(t, \mathbf{x})$ 处由源在 $t_{\text{ret}}$ 时刻的状态决定：
 
-$$ h_{ij}^{\text{TT}}(t, \mathbf{x}) = \frac{2G}{c^4 R} \Lambda_{ij,kl}(\hat{N}) \frac{d^2 I_{kl}}{dt^2}(t_{\text{ret}}) $$
+$$
+h_{ij}^{\text{TT}}(t, \mathbf{x}) = \frac{2G}{c^4 R} \Lambda_{ij,kl}(\hat{N}) \frac{d^2 I_{kl}}{dt^2}(t_{\text{ret}})
+$$
 
 **近场 vs 辐射场** (2.5PN 展开结构)：
 
@@ -144,17 +174,23 @@ $$ h_{ij}^{\text{TT}}(t, \mathbf{x}) = \frac{2G}{c^4 R} \Lambda_{ij,kl}(\hat{N})
 
 **洛希极限** (Rees 1988, Hills 1975)：
 
-$$ d_{\text{Roche}} = R_{\text{body}} \left( \frac{2 M_{\text{bh}}}{M_{\text{body}}} \right)^{1/3} $$
+$$
+d_{\text{Roche}} = R_{\text{body}} \left( \frac{2 M_{\text{bh}}}{M_{\text{body}}} \right)^{1/3}
+$$
 
 **撕裂发生于视界外的条件**：$d_{\text{Roche}} > r_s = 2GM_{\text{bh}}/c^2$
 
 等价为密度判据：
 
-$$ \rho_{\text{body}} < \rho_{\text{BH}} = \frac{3 M_{\text{bh}}}{4\pi r_s^3} = \frac{3 c^6}{32\pi G^3 M_{\text{bh}}^2} $$
+$$
+\rho_{\text{body}} < \rho_{\text{BH}} = \frac{3 M_{\text{bh}}}{4\pi r_s^3} = \frac{3 c^6}{32\pi G^3 M_{\text{bh}}^2}
+$$
 
 **Hills 质量** $M_H$：对太阳型恒星 ($M_\odot, R_\odot$)：
 
-$$ M_H \approx 1.08 \times 10^8 M_\odot \quad \text{(Schwarzschild)} $$
+$$
+M_H \approx 1.08 \times 10^8 M_\odot \quad \text{(Schwarzschild)}
+$$
 
 - $M_{\text{bh}} < M_H$：太阳型恒星在视界外被撕裂（产生潮汐撕裂事件 TDE）
 - $M_{\text{bh}} > M_H$：恒星整体越过视界被吞噬
@@ -169,28 +205,44 @@ $$ M_H \approx 1.08 \times 10^8 M_\odot \quad \text{(Schwarzschild)} $$
 
 实现 plus (+) 和 cross (×) 两种极化模式 (Maggiore 2008)：
 
-$$ h_+ = h_0 \cdot \frac{1 + \cos^2\iota}{2} \cdot \cos(\Phi) $$
-$$ h_\times = h_0 \cdot \cos\iota \cdot \sin(\Phi) $$
+$$
+h_+ = h_0 \cdot \frac{1 + \cos^2\iota}{2} \cdot \cos(\Phi)
+$$
+$$
+h_\times = h_0 \cdot \cos\iota \cdot \sin(\Phi)
+$$
 
 其中 $\iota$ 为观测者相对于轨道平面的倾角，$\Phi$ 为引力波相位。
 
 **Chirp 质量**：
 
-$$ M_c = \frac{(m_1 m_2)^{3/5}}{(m_1 + m_2)^{1/5}}, \quad h_0 = \frac{4 M_c^{5/3} \omega^{2/3}}{D} $$
+$$
+M_c = \frac{(m_1 m_2)^{3/5}}{(m_1 + m_2)^{1/5}}, \quad h_0 = \frac{4 M_c^{5/3} \omega^{2/3}}{D}
+$$
 
 **TT 规范应变张量**（含极化角 $\psi$ 旋转）：
 
-$$ h_{\theta\theta} = h_+ \cos 2\psi - h_\times \sin 2\psi $$
-$$ h_{\phi\phi} = -h_+ \cos 2\psi - h_\times \sin 2\psi $$
-$$ h_{\theta\phi} = h_+ \sin 2\psi + h_\times \cos 2\psi $$
+$$
+h_{\theta\theta} = h_+ \cos 2\psi - h_\times \sin 2\psi
+$$
+$$
+h_{\phi\phi} = -h_+ \cos 2\psi - h_\times \sin 2\psi
+$$
+$$
+h_{\theta\phi} = h_+ \sin 2\psi + h_\times \cos 2\psi
+$$
 
 ### 8. 线性化引力与叠加原理
 
-$$ g_{\mu\nu} = \eta_{\mu\nu} + h_{\mu\nu}, \quad |h_{\mu\nu}| \ll 1 $$
+$$
+g_{\mu\nu} = \eta_{\mu\nu} + h_{\mu\nu}, \quad |h_{\mu\nu}| \ll 1
+$$
 
 在弱场极限下，多个源的曲率张量**线性叠加**：
 
-$$ E_{jk}^{\text{total}} = \sum_{i=1}^{N_{\text{bodies}}} E_{jk}^{(i)} + E_{jk}^{\text{GW}} $$
+$$
+E_{jk}^{\text{total}} = \sum_{i=1}^{N_{\text{bodies}}} E_{jk}^{(i)} + E_{jk}^{\text{GW}}
+$$
 
 所有质量源（黑洞和普通天体）均产生潮汐效应，与引力波动态振荡叠加。
 
