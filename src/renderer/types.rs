@@ -23,7 +23,8 @@ pub struct ModelUniform {
     pub time: f32,
     pub alpha: f32,
     pub bh_mass: f32,
-    pub _pad: [f32; 44],
+    pub _pad0: [f32; 32],
+    pub _pad1: [f32; 12],
 }
 
 impl ModelUniform {
@@ -40,7 +41,8 @@ impl ModelUniform {
             time,
             alpha,
             bh_mass,
-            _pad: [0.0; 44],
+            _pad0: [0.0; 32],
+            _pad1: [0.0; 12],
         }
     }
 }

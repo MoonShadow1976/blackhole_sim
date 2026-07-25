@@ -69,7 +69,7 @@ impl App {
 
                 for (screen, color, label, _depth) in &projected {
                     let end = center + *screen;
-                    painter.line_segment([center, end], Stroke::new(2.5, *color));
+                    painter.line_segment([center, end], Stroke::new(2.5_f32, *color));
                     // 轴标签放在轴末端外侧
                     let dir = if screen.length() > 0.001 {
                         screen.normalized()
