@@ -7,7 +7,32 @@ mod physics;
 mod renderer;
 mod ui;
 
+#[cfg(not(target_family = "wasm"))]
 use std::time::Instant;
+
+#[cfg(target_family = "wasm")]
+fn perf_now_ms() -> f64 {
+    web_sys::window()
+        .unwrap()
+        .performance()
+        .unwrap()
+        .now()
+}
+
+#[cfg(target_family = "wasm")]
+#[derive(Clone, Copy)]
+struct Instant(f64);
+
+#[cfg(target_family = "wasm")]
+impl Instant {
+    fn now() -> Self {
+        Self(perf_now_ms())
+    }
+    fn duration_since(&self, earlier: Self) -> std::time::Duration {
+        let ms = (self.0 - earlier.0).max(0.0);
+        std::time::Duration::from_secs_f64(ms / 1000.0)
+    }
+}
 
 use camera::OrbitCamera;
 use physics::Simulation;
