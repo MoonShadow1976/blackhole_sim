@@ -76,6 +76,19 @@ pub struct DebrisInstance {
     pub _pad: [f32; 3],
 }
 
+/// 轨迹点实例数据（instanced billboard）
+/// color_type: 0=黑洞轨迹(橙), 1=天体轨迹(青), 2=预览天体轨迹(黄), 3=预览黑洞轨迹(粉紫)
+/// shape_type: 0=方形(黑洞), 1=三角形(天体)
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+pub struct TrailInstance {
+    pub pos: [f32; 3],
+    pub color_type: f32,
+    pub shape_type: f32,
+    pub fade: f32,
+    pub _pad: [f32; 1],
+}
+
 /// 四边形顶点（billboard 用，2D 位置）
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -366,10 +379,9 @@ fn compute_lensed_direction(ro: vec3<f32>, rd: vec3<f32>) -> vec3<f32> {
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     if (input.object_type == 0u) {
-        // 事件视界：纯黑色，不透明
-        return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+        return vec4<f32>(0.0, 0.0, 0.0, input.alpha);
     } else if (input.object_type == 1u) {
-        discard;
+        return vec4<f32>(0.0, 0.0, 0.0, 0.0);
     } else if (input.object_type == 2u) {
         let center = input.bh_center;
         let p = input.world_pos;
@@ -389,7 +401,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         let intensity = ring * animated * input.alpha * 0.9;
         
         if (intensity < 0.015) {
-            discard;
+            return vec4<f32>(0.0, 0.0, 0.0, 0.0);
         }
         
         return vec4<f32>(col, intensity);
@@ -401,20 +413,15 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             return vec4<f32>(star_field(rd), 1.0);
         }
 
-        // 使用碰撞参数 b 判断光线是否被黑洞捕获
-        // 临界碰撞参数 b_c = 3√3·M ≈ 5.196·M (Synge 1966)
-        // b < b_c: 光线被捕获（黑洞阴影）
-        // b ≈ b_c: 光子环（薄亮环）
         var hit_black = false;
         var photon_ring = 0.0;
 
         for (var idx = 0u; idx < bhs.count; idx = idx + 1u) {
             let bh = bhs.holes[idx];
             let mass = bh.mass;
-            let b_c = 3.0 * sqrt(3.0) * mass;  // 临界碰撞参数
+            let b_c = 3.0 * sqrt(3.0) * mass;
 
             let to_bh = bh.pos - ro;
-            // 碰撞参数 b = |rd × to_bh|（rd 为单位向量）
             let cross_v = cross(rd, to_bh);
             let b = length(cross_v);
 
@@ -422,8 +429,6 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 hit_black = true;
             }
 
-            // 光子环：b ≈ b_c 时出现薄亮环
-            // 环宽约为 Rs 的 3%（高阶像衰减决定，非常细）
             let rs = schwarzschild_radius(mass);
             let ring_width = rs * 0.03;
             let ring_dist = abs(b - b_c);
@@ -434,7 +439,6 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         }
 
         if (hit_black) {
-            // 阴影区域内，如果有光子环则绘制
             if (photon_ring > 0.0) {
                 let ring_col = vec3<f32>(1.0, 0.85, 0.5) * photon_ring * 3.0;
                 return vec4<f32>(ring_col, 1.0);
@@ -450,7 +454,6 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
         var bg_col = star_field(lensed_dir);
 
-        // 阴影外若有光子环，叠加到背景上
         if (photon_ring > 0.0) {
             let ring_col = vec3<f32>(1.0, 0.85, 0.5) * photon_ring * 3.0;
             bg_col = bg_col + ring_col;
@@ -458,24 +461,22 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
         return vec4<f32>(bg_col, 1.0);
     } else if (input.object_type == 4u) {
-        // 普通天体（恒星）：球面着色，中心亮边缘暗，颜色偏黄白
         let n = normalize(input.normal);
         let view_dir = normalize(input.view_dir);
         let ndotv = max(dot(n, view_dir), 0.0);
         
-        // 临边昏暗（limb darkening）
         let limb = pow(ndotv, 0.5);
         
         let base_col = vec3<f32>(1.0, 0.95, 0.75);
         var col = base_col * limb;
         
-        // 中心加亮（高光）
         let center_boost = pow(ndotv, 4.0) * 0.3;
         col = col + vec3<f32>(1.0, 0.9, 0.6) * center_boost;
         
-        return vec4<f32>(col, 1.0);
+        return vec4<f32>(col, input.alpha);
     }
-    return vec4<f32>(1.0, 0.0, 1.0, 1.0);
+    
+    return vec4<f32>(0.0, 0.0, 0.0, 0.0);
 }
 "#;
 
@@ -567,6 +568,122 @@ fn debris_fs_main(input: DebrisVSOutput) -> @location(0) vec4<f32> {
 }
 "#;
 
+/// 轨迹点顶点着色器
+const TRAIL_VERTEX_SHADER: &str = r#"
+struct CameraUniform {
+    view_proj: mat4x4<f32>,
+    view_inv: mat4x4<f32>,
+    proj_inv: mat4x4<f32>,
+    camera_pos: vec3<f32>,
+    _pad: f32,
+};
+@group(0) @binding(0) var<uniform> camera: CameraUniform;
+
+struct TrailVSInput {
+    @location(0) quad_pos: vec2<f32>,
+    @location(1) instance_pos: vec3<f32>,
+    @location(2) instance_color_type: f32,
+    @location(3) instance_shape_type: f32,
+    @location(4) instance_fade: f32,
+};
+
+struct TrailVSOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+    @location(1) color_type: f32,
+    @location(2) shape_type: f32,
+    @location(3) fade: f32,
+};
+
+@vertex
+fn trail_vs_main(input: TrailVSInput) -> TrailVSOutput {
+    var out: TrailVSOutput;
+    let center_clip = camera.view_proj * vec4<f32>(input.instance_pos, 1.0);
+    let dist = length(camera.camera_pos - input.instance_pos);
+    let scale = 0.14 * center_clip.w / max(dist, 0.1);
+    let offset = input.quad_pos * scale;
+    out.clip_position = vec4<f32>(
+        center_clip.x + offset.x,
+        center_clip.y + offset.y,
+        center_clip.z,
+        center_clip.w,
+    );
+    out.uv = input.quad_pos;
+    out.color_type = input.instance_color_type;
+    out.shape_type = input.instance_shape_type;
+    out.fade = input.instance_fade;
+    return out;
+}
+"#;
+
+/// 轨迹点片段着色器
+const TRAIL_FRAGMENT_SHADER: &str = r#"
+struct TrailVSOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+    @location(1) color_type: f32,
+    @location(2) shape_type: f32,
+    @location(3) fade: f32,
+};
+
+fn sdf_square(p: vec2<f32>, half: f32) -> f32 {
+    let d = abs(p) - vec2<f32>(half, half);
+    return length(max(d, vec2<f32>(0.0))) + min(max(d.x, d.y), 0.0);
+}
+
+fn sdf_triangle(p: vec2<f32>, r: f32) -> f32 {
+    let k = sqrt(3.0);
+    var p2 = vec2<f32>(abs(p.x), -p.y);
+    p2.x = p2.x - r * 0.5;
+    p2.y = p2.y - r * k / 6.0;
+    let c = vec2<f32>(-0.5, k * 0.5);
+    let m = min(dot(p2, c), 0.0);
+    p2 = p2 - vec2<f32>(c.x * m, c.y * m);
+    let d = vec2<f32>(length(p2), r * 0.5 - abs(p.x)) + p2 * vec2<f32>(-sign(p2.y), 0.0);
+    return -min(d.x, d.y) * sign(max(d.x, d.y));
+}
+
+@fragment
+fn trail_fs_main(input: TrailVSOutput) -> @location(0) vec4<f32> {
+    var alpha: f32;
+    let edge = 0.08;
+
+    if (input.shape_type < 0.5) {
+        // 方形（黑洞）
+        let d = sdf_square(input.uv, 0.75);
+        if (d > 0.0) { discard; }
+        alpha = clamp(-d / edge, 0.0, 1.0);
+    } else {
+        // 三角形（天体）
+        let d = sdf_triangle(input.uv, 0.9);
+        if (d > 0.0) { discard; }
+        alpha = clamp(-d / edge, 0.0, 1.0);
+    }
+
+    var col: vec3<f32>;
+    if (input.color_type < 0.5) {
+        // 黑洞轨迹：橙色
+        col = vec3<f32>(1.0, 0.55, 0.2);
+    } else if (input.color_type < 1.5) {
+        // 天体轨迹：青色
+        col = vec3<f32>(0.3, 0.9, 1.0);
+    } else if (input.color_type < 2.5) {
+        // 预览天体轨迹：黄色
+        col = vec3<f32>(1.0, 0.9, 0.3);
+    } else {
+        // 预览黑洞轨迹：粉紫色
+        col = vec3<f32>(0.9, 0.4, 1.0);
+    }
+
+    // fade: 0=最早(暗), 1=最新(亮)
+    let fade_alpha = 0.15 + input.fade * 0.85;
+    let fade_bright = 0.35 + input.fade * 0.65;
+    let final_alpha = alpha * fade_alpha;
+    let final_col = col * fade_bright;
+    return vec4<f32>(final_col * final_alpha * 2.0, final_alpha);
+}
+"#;
+
 /// wgpu 渲染器
 pub struct Renderer {
     pub device: wgpu::Device,
@@ -587,6 +704,8 @@ pub struct Renderer {
     pub bind_group: wgpu::BindGroup,
     pub debris_pipeline: wgpu::RenderPipeline,
     pub debris_instance_buffer: wgpu::Buffer,
+    pub trail_instance_buffer: wgpu::Buffer,
+    pub trail_pipeline: wgpu::RenderPipeline,
     pub quad_vertices: wgpu::Buffer,
     pub quad_indices: wgpu::Buffer,
     pub quad_index_count: u32,
@@ -958,6 +1077,115 @@ impl Renderer {
             mapped_at_creation: false,
         });
 
+        // 轨迹实例缓冲（最多 4000 个点）
+        const TRAIL_MAX: usize = 4000;
+        let trail_instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("轨迹实例缓冲"),
+            size: (TRAIL_MAX * std::mem::size_of::<TrailInstance>()) as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // 轨迹渲染管线（复用 quad 顶点，独立着色器）
+        let trail_vs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("轨迹顶点着色器"),
+            source: wgpu::ShaderSource::Wgsl(TRAIL_VERTEX_SHADER.into()),
+        });
+        let trail_fs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("轨迹片段着色器"),
+            source: wgpu::ShaderSource::Wgsl(TRAIL_FRAGMENT_SHADER.into()),
+        });
+        let trail_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("轨迹渲染管线"),
+            layout: Some(&debris_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &trail_vs_module,
+                entry_point: Some("trail_vs_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[
+                    wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<QuadVertex>() as wgpu::BufferAddress,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &[wgpu::VertexAttribute {
+                            offset: 0,
+                            shader_location: 0,
+                            format: wgpu::VertexFormat::Float32x2,
+                        }],
+                    },
+                    wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<TrailInstance>() as wgpu::BufferAddress,
+                        step_mode: wgpu::VertexStepMode::Instance,
+                        attributes: &[
+                            wgpu::VertexAttribute {
+                                offset: 0,
+                                shader_location: 1,
+                                format: wgpu::VertexFormat::Float32x3,
+                            },
+                            wgpu::VertexAttribute {
+                                offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                                shader_location: 2,
+                                format: wgpu::VertexFormat::Float32,
+                            },
+                            wgpu::VertexAttribute {
+                                offset: (std::mem::size_of::<[f32; 3]>() + std::mem::size_of::<f32>()) as wgpu::BufferAddress,
+                                shader_location: 3,
+                                format: wgpu::VertexFormat::Float32,
+                            },
+                            wgpu::VertexAttribute {
+                                offset: (std::mem::size_of::<[f32; 3]>() + std::mem::size_of::<f32>() + std::mem::size_of::<f32>()) as wgpu::BufferAddress,
+                                shader_location: 4,
+                                format: wgpu::VertexFormat::Float32,
+                            },
+                        ],
+                    },
+                ],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &trail_fs_module,
+                entry_point: Some("trail_fs_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::SrcAlpha,
+                            dst_factor: wgpu::BlendFactor::One,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                        alpha: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::SrcAlpha,
+                            dst_factor: wgpu::BlendFactor::One,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                    }),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None,
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        });
+
         Self {
             device,
             queue,
@@ -977,6 +1205,8 @@ impl Renderer {
             bind_group,
             debris_pipeline,
             debris_instance_buffer,
+            trail_instance_buffer,
+            trail_pipeline,
             quad_vertices,
             quad_indices,
             quad_index_count,
@@ -1007,6 +1237,9 @@ impl Renderer {
         debris: &[([f32; 3], f32, f32)],
         show_waves: bool,
         time: f32,
+        trails: &[TrailInstance],
+        preview_black_hole: Option<(Vector3<f32>, f32)>,
+        preview_body: Option<([f32; 3], f32)>,
     ) -> Result<(wgpu::SurfaceTexture, wgpu::TextureView), wgpu::SurfaceError> {
         let aspect = self.config.width as f32 / self.config.height as f32;
         let proj = Matrix4::new_perspective(aspect, 60.0_f32.to_radians(), 0.1, 10000.0);
@@ -1068,6 +1301,16 @@ impl Renderer {
                 &self.debris_instance_buffer,
                 0,
                 bytemuck::cast_slice(&debris_instances),
+            );
+        }
+
+        // 写入轨迹实例数据（在 render pass 之前）
+        let trail_count = trails.len().min(4000) as u32;
+        if trail_count > 0 {
+            self.queue.write_buffer(
+                &self.trail_instance_buffer,
+                0,
+                bytemuck::cast_slice(&trails[..trail_count as usize]),
             );
         }
 
@@ -1155,6 +1398,30 @@ impl Renderer {
                 draw_calls.push((idx * MODEL_UNIFORM_SIZE as u32, 0));
             }
 
+            // 4.5 预览天体（闪烁）
+            if let Some((pos, mass)) = preview_body {
+                let blink = (time * 4.0).sin() * 0.5 + 0.5;
+                let alpha = 0.3 + blink * 0.6;
+                let scale = mass.powf(0.4) * 0.8;
+                let idx = uniforms.len() as u32;
+                let m = Matrix4::new_scaling(scale);
+                let model_matrix = Matrix4::new_translation(&Vector3::new(pos[0], pos[1], pos[2])) * m;
+                uniforms.push(ModelUniform::new(model_matrix.into(), 4, time, alpha, 0.0));
+                draw_calls.push((idx * MODEL_UNIFORM_SIZE as u32, 4));
+            }
+
+            // 4.6 预览黑洞（闪烁）
+            if let Some((pos, mass)) = preview_black_hole {
+                let blink = (time * 4.0 + 1.0).sin() * 0.5 + 0.5;
+                let alpha = 0.4 + blink * 0.6;
+                let idx = uniforms.len() as u32;
+                let event_horizon_r = 2.0 * mass;
+                let m = Matrix4::new_scaling(event_horizon_r);
+                let model_matrix = Matrix4::new_translation(&pos) * m;
+                uniforms.push(ModelUniform::new(model_matrix.into(), 0, time, alpha, mass));
+                draw_calls.push((idx * MODEL_UNIFORM_SIZE as u32, 0));
+            }
+
             // 在 render pass 之前一次性写入所有 uniform
             for (i, u) in uniforms.iter().enumerate() {
                 self.queue.write_buffer(
@@ -1201,6 +1468,19 @@ impl Renderer {
                     wgpu::IndexFormat::Uint16,
                 );
                 render_pass.draw_indexed(0..self.quad_index_count, 0, 0..debris_count);
+            }
+
+            // 6. 绘制轨迹散点（additive blending，不写深度）
+            if trail_count > 0 {
+                render_pass.set_pipeline(&self.trail_pipeline);
+                render_pass.set_bind_group(0, &self.bind_group, &[0]);
+                render_pass.set_vertex_buffer(0, self.quad_vertices.slice(..));
+                render_pass.set_vertex_buffer(1, self.trail_instance_buffer.slice(..));
+                render_pass.set_index_buffer(
+                    self.quad_indices.slice(..),
+                    wgpu::IndexFormat::Uint16,
+                );
+                render_pass.draw_indexed(0..self.quad_index_count, 0, 0..trail_count);
             }
         }
 

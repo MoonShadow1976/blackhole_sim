@@ -55,6 +55,8 @@ struct App {
     ui_body_vel_x: f32,
     ui_body_vel_y: f32,
     ui_body_vel_z: f32,
+    // 轨迹预测
+    ui_show_trails: bool,
 }
 
 impl App {
@@ -89,6 +91,7 @@ impl App {
             ui_body_vel_x: 0.0,
             ui_body_vel_y: 0.0,
             ui_body_vel_z: 0.6,
+            ui_show_trails: true,
         }
     }
 
@@ -179,6 +182,7 @@ impl App {
         let bh_count = self.sim.black_hole_count();
 
         let mut show_waves = self.ui_show_waves;
+        let mut show_trails = self.ui_show_trails;
         let mut sim_speed = self.ui_sim_speed;
         let mut paused = self.ui_paused;
         let mut reset = false;
@@ -268,7 +272,8 @@ impl App {
                     });
 
                     ui.add_space(4.0);
-                    ui.checkbox(&mut show_waves, "📡 显示引力波");
+                    ui.checkbox(&mut show_waves, "显示引力波");
+                    ui.checkbox(&mut show_trails, "显示轨迹预测");
                     ui.add_space(4.0);
 
                     ui.add(
@@ -408,6 +413,7 @@ impl App {
         });
 
         self.ui_show_waves = show_waves;
+        self.ui_show_trails = show_trails;
         self.ui_sim_speed = sim_speed;
         self.ui_paused = paused;
         self.ui_reset = reset;
@@ -638,12 +644,115 @@ impl ApplicationHandler for App {
                 let body_data = self.sim.get_body_render_data();
                 let debris_data = self.sim.get_debris_render_data();
 
+                // 计算轨迹预测（暂停时显示，N 尽可能大）
+                let trail_instances: Vec<renderer::TrailInstance> = if self.ui_show_trails && self.ui_paused {
+                    let mut instances = Vec::new();
+                    // 模拟 60 秒，每步 0.05s（1200 步）
+                    let steps = 2400;
+                    let dt_step = 0.03;
+                    let (bh_trails, body_trails) = self.sim.predict_trajectories(steps, dt_step);
+
+                    // 黑洞轨迹：橙色 (color_type=0)，方形 (shape_type=0)
+                    for trail in &bh_trails {
+                        let n = trail.len();
+                        for (i, pos) in trail.iter().enumerate() {
+                            let fade = i as f32 / n.max(1) as f32;
+                            instances.push(renderer::TrailInstance {
+                                pos: [pos.x, pos.y, pos.z],
+                                color_type: 0.0,
+                                shape_type: 0.0,
+                                fade,
+                                _pad: [0.0; 1],
+                            });
+                        }
+                    }
+                    // 天体轨迹：青色 (color_type=1)，三角形 (shape_type=1)
+                    for trail in &body_trails {
+                        let n = trail.len();
+                        for (i, pos) in trail.iter().enumerate() {
+                            let fade = i as f32 / n.max(1) as f32;
+                            instances.push(renderer::TrailInstance {
+                                pos: [pos.x, pos.y, pos.z],
+                                color_type: 1.0,
+                                shape_type: 1.0,
+                                fade,
+                                _pad: [0.0; 1],
+                            });
+                        }
+                    }
+
+                    // 如果正在配置黑洞参数，预览新黑洞轨迹（粉紫色 color_type=3），方形 (shape_type=0)
+                    let preview_bh = physics::BlackHole {
+                        mass: self.ui_add_mass,
+                        pos: nalgebra::Vector3::new(self.ui_add_pos_x, self.ui_add_pos_y, self.ui_add_pos_z),
+                        vel: nalgebra::Vector3::new(self.ui_add_vel_x, self.ui_add_vel_y, self.ui_add_vel_z),
+                    };
+                    let (preview_bh_trails, _) = self.sim.predict_trajectories_with_black_hole(&preview_bh, steps, dt_step);
+                    if let Some(preview) = preview_bh_trails.last() {
+                        let n = preview.len();
+                        for (i, pos) in preview.iter().enumerate() {
+                            let fade = i as f32 / n.max(1) as f32;
+                            instances.push(renderer::TrailInstance {
+                                pos: [pos.x, pos.y, pos.z],
+                                color_type: 3.0,
+                                shape_type: 0.0,
+                                fade,
+                                _pad: [0.0; 1],
+                            });
+                        }
+                    }
+
+                    // 如果正在配置天体参数，预览新天体轨迹（黄色 color_type=2），三角形 (shape_type=1)
+                    let preview_body = physics::CelestialBody {
+                        mass: self.ui_body_mass,
+                        pos: nalgebra::Vector3::new(self.ui_body_pos_x, self.ui_body_pos_y, self.ui_body_pos_z),
+                        vel: nalgebra::Vector3::new(self.ui_body_vel_x, self.ui_body_vel_y, self.ui_body_vel_z),
+                        hardness: 1.0,
+                    };
+                    let (_, preview_trails) = self.sim.predict_trajectories_with_body(&preview_body, steps, dt_step);
+                    if let Some(preview) = preview_trails.last() {
+                        let n = preview.len();
+                        for (i, pos) in preview.iter().enumerate() {
+                            let fade = i as f32 / n.max(1) as f32;
+                            instances.push(renderer::TrailInstance {
+                                pos: [pos.x, pos.y, pos.z],
+                                color_type: 2.0,
+                                shape_type: 1.0,
+                                fade,
+                                _pad: [0.0; 1],
+                            });
+                        }
+                    }
+
+                    // 限制总数到 4000
+                    instances.truncate(4000);
+                    instances
+                } else {
+                    Vec::new()
+                };
+
                 // 渲染 3D 场景
                 let (output, view) = {
                     let Some(renderer) = self.renderer.as_mut() else {
                         return;
                     };
-                    match renderer.render(&self.camera, &wave_objects, &bh_data, &body_data, &debris_data, show_waves, time) {
+                    let preview_black_hole = if self.ui_paused {
+                        Some((
+                            nalgebra::Vector3::new(self.ui_add_pos_x, self.ui_add_pos_y, self.ui_add_pos_z),
+                            self.ui_add_mass,
+                        ))
+                    } else {
+                        None
+                    };
+                    let preview_body = if self.ui_paused {
+                        Some((
+                            [self.ui_body_pos_x, self.ui_body_pos_y, self.ui_body_pos_z],
+                            self.ui_body_mass,
+                        ))
+                    } else {
+                        None
+                    };
+                    match renderer.render(&self.camera, &wave_objects, &bh_data, &body_data, &debris_data, show_waves, time, &trail_instances, preview_black_hole, preview_body) {
                         Ok(result) => result,
                         Err(wgpu::SurfaceError::Outdated) | Err(wgpu::SurfaceError::Lost) => {
                             let size = window_ref.inner_size();
