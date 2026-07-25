@@ -193,7 +193,7 @@ impl App {
             ui_body_vel_y: 0.0,
             ui_body_vel_z: 0.6,
             ui_show_trails: true,
-            ui_lang: UiLang::Zh,
+            ui_lang: UiLang::En,
         }
     }
 
@@ -229,6 +229,26 @@ impl ApplicationHandler<AppEvent> for App {
             .create_window(window_attrs)
             .expect("无法创建窗口");
         let scale_factor = window.scale_factor();
+
+        #[cfg(target_family = "wasm")]
+        {
+            use wasm_bindgen::JsCast;
+            use winit::platform::web::WindowExtWebSys;
+            let canvas = window.canvas().expect("winit window has no canvas");
+            let style = canvas.style();
+            style.set_property("display", "block").unwrap();
+            style.set_property("width", "100vw").unwrap();
+            style.set_property("height", "100vh").unwrap();
+            web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .body()
+                .unwrap()
+                .append_child(&canvas)
+                .unwrap();
+        }
+
         let window: &'static Window = Box::leak(Box::new(window));
 
         // 设置 egui 样式
