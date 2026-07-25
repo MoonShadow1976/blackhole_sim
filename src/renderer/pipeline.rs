@@ -11,8 +11,13 @@ use crate::geometry::{create_ring, create_sphere, Vertex};
 
 impl Renderer {
     pub async fn new(window: &'static winit::window::Window) -> Self {
+        let backends = if cfg!(target_family = "wasm") {
+            wgpu::Backends::GL
+        } else {
+            wgpu::Backends::all()
+        };
         let instance_desc = wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
+            backends,
             ..Default::default()
         };
         let instance = wgpu::Instance::new(&instance_desc);
@@ -28,12 +33,18 @@ impl Renderer {
             .await
             .expect("无法找到合适的 GPU 适配器");
 
+        let limits = if cfg!(target_family = "wasm") {
+            wgpu::Limits::downlevel_webgl2_defaults()
+        } else {
+            wgpu::Limits::default()
+        };
+
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("GPU 设备"),
                     required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::default(),
+                    required_limits: limits,
                     memory_hints: wgpu::MemoryHints::default(),
                 },
                 None,

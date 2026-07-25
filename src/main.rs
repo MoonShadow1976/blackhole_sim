@@ -809,8 +809,8 @@ fn setup_chinese_font_from_data(ctx: &egui::Context, font_data: &[u8]) {
 #[cfg(target_family = "wasm")]
 async fn load_chinese_font_async() -> Option<Vec<u8>> {
     let font_urls = [
-        "https://cdn.jsdelivr.net/npm/notosans-sc@36.0.0/fonts/NotoSansSC-Regular.otf",
-        "https://fonts.gstatic.com/s/notosanssc/v36/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYxNbPzS5HE.0.woff2",
+        "https://cdn.jsdelivr.net/npm/@electron-fonts/noto-sans-sc@1.2.0/fonts/NotoSansSC-Regular.ttf",
+        "https://cdn.jsdelivr.net/gh/notofonts/noto-cjk@main/Sans/OTF/SimplifiedChinese/NotoSansSC-Regular.otf",
     ];
 
     for url in &font_urls {
@@ -833,7 +833,8 @@ async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
     opts.set_method("GET");
     opts.set_mode(RequestMode::Cors);
 
-    let request = Request::new_with_str_and_init(url, &opts).map_err(|e| format!("request error: {:?}", e))?;
+    let request = Request::new_with_str_and_init(url, &opts)
+        .map_err(|e| format!("request error: {:?}", e))?;
 
     let window = web_sys::window().ok_or("no window")?;
     let resp_value = JsFuture::from(window.fetch_with_request(&request))
@@ -848,9 +849,12 @@ async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
         return Err(format!("HTTP {}", resp.status()));
     }
 
-    let buf = JsFuture::from(resp.array_buffer().map_err(|e| format!("array_buffer error: {:?}", e))?)
-        .await
-        .map_err(|e| format!("array_buffer future error: {:?}", e))?;
+    let buf = JsFuture::from(
+        resp.array_buffer()
+            .map_err(|e| format!("array_buffer error: {:?}", e))?,
+    )
+    .await
+    .map_err(|e| format!("array_buffer future error: {:?}", e))?;
 
     let array = js_sys::Uint8Array::new(&buf);
     Ok(array.to_vec())
