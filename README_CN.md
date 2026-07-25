@@ -41,7 +41,7 @@ $$
 
 由于 $E_{jk}$ 是无迹的（$\text{tr}(E) = 0$），三个特征值之和为零，拉伸和压缩方向互补。
 
-**渲染方式**：线段渲染为面向相机的四边形 ribbon（TriangleList 拓扑，每条线 2 三角形 = 6 顶点），强度同时驱动厚度（基准的 $0.2\times$~$1.5\times$）和不透明度（$0$~$0.75$）。
+**渲染方式**：线段渲染为面向相机的四边形 ribbon（TriangleList 拓扑，每条线 2 三角形 = 6 顶点），强度同时驱动厚度（基准的 $0.2\times$ ~ $1.5\times$）和不透明度（$0$ ~ $0.75$）。
 
 **三正交面模式**：可切换为仅显示三个中心正交面（XY、YZ、XZ）上的格点，而非完整 3D 体积，提供更清晰的横截面视图。网格中心跟随所有黑洞的质量加权质心，平滑过渡（每帧响应 0.15，约 7 帧达到 95%）。
 
@@ -50,24 +50,29 @@ $$
 双星系统因引力波辐射损失轨道能量，导致旋进 (inspiral) 并最终合并。基于 Peters (1964) 经典公式：
 
 **能量损失率**：
+
 $$
 \frac{dE}{dt} = -\frac{32}{5} \frac{G^4 \mu^2 M^3}{c^5 a^5}
 $$
 
 **半长轴变化率**：
+
 $$
 \frac{da}{dt} = -\frac{64}{5} \frac{G^3 \mu M^2}{c^5 a^3}
 $$
 
 **等效相对运动阻力加速度**（自然单位制 G=c=1）：
+
 $$
 \mathbf{a}_{\text{rad}} = -\frac{32}{5} \frac{\mu M^2}{r^4} \mathbf{v}_{\text{rel}}
 $$
 
 拆分到两体（质心系，伽利略变换下加速度不变）：
+
 $$
 \mathbf{a}_i = +\frac{32}{5} \frac{m_i m_j^2}{r^4} \mathbf{v}_{\text{rel}}
 $$
+
 $$
 \mathbf{a}_j = -\frac{32}{5} \frac{m_i^2 m_j}{r^4} \mathbf{v}_{\text{rel}}
 $$
@@ -116,11 +121,13 @@ b_c \approx 3\sqrt{3} M \left( 1 + \delta_{\text{mono}} + \delta_{\text{tidal}} 
 $$
 
 **单极扰动**（整体压缩）：
+
 $$
 \delta_{\text{mono}} = -\kappa_1 \frac{M'}{D}
 $$
 
 **四极潮汐扰动**（角度相关变形）：
+
 $$
 \delta_{\text{tidal}} = \kappa_2 \frac{M'}{M} \left(\frac{M}{D}\right)^2 P_2(\cos\theta)
 $$

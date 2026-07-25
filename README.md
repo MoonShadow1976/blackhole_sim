@@ -43,7 +43,7 @@ At each spatial sample point, we compute the three eigenvalues and eigenvectors 
 
 Since $E_{jk}$ is traceless ($\text{tr}(E) = 0$), the three eigenvalues sum to zero; stretching and compression directions are complementary.
 
-**Rendering**: Lines are rendered as camera-facing quad ribbons (TriangleList topology, 2 triangles = 6 vertices per line), with intensity driving both thickness ($0.2\times$–$1.5\times$ base) and opacity ($0$–$0.75$).
+**Rendering**: Lines are rendered as camera-facing quad ribbons (TriangleList topology, 2 triangles = 6 vertices per line), with intensity driving both thickness ($0.2\times$ – $1.5\times$ base) and opacity ($0$ – $0.75$).
 
 **Three-orthogonal-planes mode**: Instead of rendering the full 3D volume of grid points, you can toggle to show only the three central orthogonal planes (XY, YZ, XZ), producing a cleaner cross-section view. The grid center follows the mass-weighted centroid of all black holes with a smooth response (0.15 per frame, ~7 frames to 95%).
 
@@ -52,24 +52,29 @@ Since $E_{jk}$ is traceless ($\text{tr}(E) = 0$), the three eigenvalues sum to z
 Binary systems lose orbital energy to gravitational wave radiation, causing inspiral and eventual merger. Based on the classic Peters (1964) formula:
 
 **Energy loss rate**:
+
 $$
 \frac{dE}{dt} = -\frac{32}{5} \frac{G^4 \mu^2 M^3}{c^5 a^5}
 $$
 
 **Semi-major axis decay rate**:
+
 $$
 \frac{da}{dt} = -\frac{64}{5} \frac{G^3 \mu M^2}{c^5 a^3}
 $$
 
 **Equivalent relative drag acceleration** (natural units G=c=1):
+
 $$
 \mathbf{a}_{\text{rad}} = -\frac{32}{5} \frac{\mu M^2}{r^4} \mathbf{v}_{\text{rel}}
 $$
 
 Split to two bodies (center-of-mass frame, accelerations are Galilean-invariant):
+
 $$
 \mathbf{a}_i = +\frac{32}{5} \frac{m_i m_j^2}{r^4} \mathbf{v}_{\text{rel}}
 $$
+
 $$
 \mathbf{a}_j = -\frac{32}{5} \frac{m_i^2 m_j}{r^4} \mathbf{v}_{\text{rel}}
 $$
@@ -118,11 +123,13 @@ b_c \approx 3\sqrt{3} M \left( 1 + \delta_{\text{mono}} + \delta_{\text{tidal}} 
 $$
 
 **Monopole perturbation** (overall compression):
+
 $$
 \delta_{\text{mono}} = -\kappa_1 \frac{M'}{D}
 $$
 
 **Quadrupole tidal perturbation** (angle-dependent deformation):
+
 $$
 \delta_{\text{tidal}} = \kappa_2 \frac{M'}{M} \left(\frac{M}{D}\right)^2 P_2(\cos\theta)
 $$

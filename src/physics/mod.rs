@@ -375,7 +375,11 @@ impl Simulation {
         let nb = self.bodies.len();
         let nd = self.debris.len();
         if n == 0 {
-            if english { "Empty".to_string() } else { "空".to_string() }
+            if english {
+                "Empty".to_string()
+            } else {
+                "空".to_string()
+            }
         } else if n == 1 && nb == 0 {
             if english {
                 format!("Single BH (M={:.2})", self.black_holes[0].mass)

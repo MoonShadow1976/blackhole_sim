@@ -104,9 +104,7 @@ impl App {
         self.draw_axis_gizmo();
 
         let time = self.sim.time;
-        let phase = self
-            .sim
-            .phase_string(matches!(self.ui_lang, UiLang::En));
+        let phase = self.sim.phase_string(matches!(self.ui_lang, UiLang::En));
         let bh_count = self.sim.black_hole_count();
 
         let mut show_waves = self.ui_show_waves;
@@ -168,13 +166,9 @@ impl App {
                 });
 
                 ui.label(
-                    egui::RichText::new(t!(
-                        self,
-                        "N体黑洞碰撞模拟",
-                        "N-Body Black Hole Collision"
-                    ))
-                    .weak()
-                    .small(),
+                    egui::RichText::new(t!(self, "N体黑洞碰撞模拟", "N-Body Black Hole Collision"))
+                        .weak()
+                        .small(),
                 );
                 ui.add_space(8.0);
                 ui.separator();
@@ -298,10 +292,7 @@ impl App {
                             .step_by(0.5),
                     );
 
-                    ui.checkbox(
-                        &mut three_planes,
-                        t!(self, "仅三正交面", "3 Planes Only"),
-                    );
+                    ui.checkbox(&mut three_planes, t!(self, "仅三正交面", "3 Planes Only"));
 
                     self.sim
                         .set_grid_params(grid_size_i as usize, grid_spacing_f);
@@ -363,13 +354,9 @@ impl App {
                 }
                 if self.sim.black_hole_count() >= 8 {
                     ui.label(
-                        egui::RichText::new(t!(
-                            self,
-                            "已达最大黑洞数 (8)",
-                            "Max black holes (8)"
-                        ))
-                        .color(egui::Color32::RED)
-                        .small(),
+                        egui::RichText::new(t!(self, "已达最大黑洞数 (8)", "Max black holes (8)"))
+                            .color(egui::Color32::RED)
+                            .small(),
                     );
                 }
 
@@ -427,13 +414,9 @@ impl App {
                 ui.add_space(6.0);
                 if ui
                     .button(
-                        egui::RichText::new(t!(
-                            self,
-                            "➕ 添加天体 (暂停)",
-                            "➕ Add Body (Paused)"
-                        ))
-                        .size(14.0)
-                        .strong(),
+                        egui::RichText::new(t!(self, "➕ 添加天体 (暂停)", "➕ Add Body (Paused)"))
+                            .size(14.0)
+                            .strong(),
                     )
                     .clicked()
                 {
@@ -486,11 +469,7 @@ impl App {
                     t!(self, "s", "s")
                 ));
                 ui.separator();
-                ui.label(format!(
-                    "{} {}",
-                    t!(self, "黑洞:", "BH:"),
-                    bh_count
-                ));
+                ui.label(format!("{} {}", t!(self, "黑洞:", "BH:"), bh_count));
                 ui.separator();
                 ui.label(format!(
                     "{} {}",
