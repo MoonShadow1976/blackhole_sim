@@ -418,7 +418,9 @@ impl ApplicationHandler for App {
                     } else {
                         None
                     };
-                    let tendex_data = self.sim.get_tendex_render_data(self.sim.tendex_three_planes);
+                    let tendex_data = self
+                        .sim
+                        .get_tendex_render_data(self.sim.tendex_three_planes);
                     match renderer.render(renderer::RenderParams {
                         camera: &self.camera,
                         waves: &wave_objects,

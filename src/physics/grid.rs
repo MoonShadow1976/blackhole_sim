@@ -5,7 +5,7 @@
 
 use nalgebra::{Matrix3, Vector3};
 
-use super::{G, Simulation, WAVE_SPEED};
+use super::{Simulation, G, WAVE_SPEED};
 
 /// Tendex 采样点：存储位置和曲率张量的特征分解
 #[derive(Clone, Copy, Debug)]
@@ -240,7 +240,7 @@ impl Simulation {
                 }
                 let n = point.eigvecs[i].norm();
                 if n > 1e-6 {
-                    point.eigvecs[i] = point.eigvecs[i] / n;
+                    point.eigvecs[i] /= n;
                 }
             }
         }
@@ -251,7 +251,10 @@ impl Simulation {
     /// 线段长度 = grid_spacing * 2/3（每侧 1/3，相邻点间留 1/3 空隙）
     /// 线段强度/线宽由 |特征值| 调制，颜色由特征值符号决定
     /// three_planes_only: 仅显示 xyz 三个正交中心面上的格点
-    pub fn get_tendex_render_data(&self, three_planes_only: bool) -> Vec<([f32; 3], [f32; 3], f32, [f32; 2], f32, f32, f32)> {
+    pub fn get_tendex_render_data(
+        &self,
+        three_planes_only: bool,
+    ) -> Vec<([f32; 3], [f32; 3], f32, [f32; 2], f32, f32, f32)> {
         let n = self.grid_size;
         let mid = n / 2;
         let mut vertices = Vec::with_capacity(self.grid_points.len() * 6);
@@ -296,11 +299,11 @@ impl Simulation {
                 // 三角形2: (-1,-1), (+1,+1), (-1,+1)
                 let corners = [
                     [-1.0, -1.0],
-                    [ 1.0, -1.0],
-                    [ 1.0,  1.0],
+                    [1.0, -1.0],
+                    [1.0, 1.0],
                     [-1.0, -1.0],
-                    [ 1.0,  1.0],
-                    [-1.0,  1.0],
+                    [1.0, 1.0],
+                    [-1.0, 1.0],
                 ];
                 for c in &corners {
                     vertices.push((

@@ -1,8 +1,8 @@
 // egui UI 相关方法（draw_axis_gizmo 与 update_egui）
 // 从 main.rs 抽离，便于维护
 
-use super::App;
 use super::physics;
+use super::App;
 
 impl App {
     /// 在画面左上角绘制三轴坐标系参考（空间定向）

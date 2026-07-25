@@ -73,15 +73,17 @@ impl Renderer {
         let take = data.len().min(MAX_TENDEX_VERTICES);
         let vertices: Vec<TendexVertex> = data[..take]
             .iter()
-            .map(|(center, line_dir, half_len, corner, sign, intensity, base_thick)| TendexVertex {
-                center: *center,
-                line_dir: *line_dir,
-                half_len: *half_len,
-                corner: *corner,
-                color_sign: *sign,
-                intensity: *intensity,
-                base_thickness: *base_thick,
-            })
+            .map(
+                |(center, line_dir, half_len, corner, sign, intensity, base_thick)| TendexVertex {
+                    center: *center,
+                    line_dir: *line_dir,
+                    half_len: *half_len,
+                    corner: *corner,
+                    color_sign: *sign,
+                    intensity: *intensity,
+                    base_thickness: *base_thick,
+                },
+            )
             .collect();
         self.tendex_vertex_count = vertices.len() as u32;
         if !vertices.is_empty() {
@@ -365,19 +367,16 @@ impl Renderer {
                 );
             }
             // 过滤掉超出容量的 draw_calls
-            draw_calls.retain(|&(offset, _)| {
-                ((offset / MODEL_UNIFORM_SIZE as u32) as usize) < max_write
-            });
+            draw_calls
+                .retain(|&(offset, _)| ((offset / MODEL_UNIFORM_SIZE as u32) as usize) < max_write);
 
             // 0. 最先画背景（使用专用管线，不写深度，永远通过深度测试）
             if let Some(offset) = bg_offset {
                 render_pass.set_pipeline(&self.bg_pipeline);
                 render_pass.set_bind_group(0, &self.bind_group, &[offset]);
                 render_pass.set_vertex_buffer(0, self.sphere_vertices.slice(..));
-                render_pass.set_index_buffer(
-                    self.sphere_indices.slice(..),
-                    wgpu::IndexFormat::Uint32,
-                );
+                render_pass
+                    .set_index_buffer(self.sphere_indices.slice(..), wgpu::IndexFormat::Uint32);
                 render_pass.draw_indexed(0..self.sphere_index_count, 0, 0..1);
             }
 

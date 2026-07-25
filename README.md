@@ -1,6 +1,7 @@
 [中文版本](README_CN.md)
 
 ---
+
 # Black Hole Simulator 🌌
 
 A real-time 3D black hole simulation with gravitational wave radiation, orbital inspiral, tidal disruption, and spacetime curvature visualization, written in Rust using WGPU.
@@ -32,6 +33,7 @@ The "electric" part of the curvature tensor \( E_{jk} \) describes tidal stretch
 where \( \mathbf{n} = \mathbf{r}/r \) is the unit vector from the mass source to the field point.
 
 At each spatial sample point, we compute the three eigenvalues and eigenvectors of \( E_{jk} \):
+
 - **Red lines**: positive eigenvalue direction (tidal **stretching**)
 - **Blue lines**: negative eigenvalue direction (tidal **compression**)
 - Line length: fixed at \( \frac{2}{3} \times \text{grid\_spacing} \) (1/3 on each side, leaving 1/3 gap between adjacent grid points)
@@ -129,12 +131,13 @@ The radiative field at observation point \( (t, \mathbf{x}) \) is determined by 
 
 **Near-field vs. radiative field** (2.5PN expansion structure):
 
-| Component | Distance dependence | Propagation |
-|-----------|---------------------|-------------|
-| Near-field (Newtonian-like) | \( \propto 1/r^2, 1/r^3 \) | Instantaneous in Newtonian limit (PN 0th order) |
-| Radiative (gravitational wave) | \( \propto 1/r \) | Strictly at \( c \) |
+| Component                      | Distance dependence        | Propagation                                     |
+| ------------------------------ | -------------------------- | ----------------------------------------------- |
+| Near-field (Newtonian-like)    | \( \propto 1/r^2, 1/r^3 \) | Instantaneous in Newtonian limit (PN 0th order) |
+| Radiative (gravitational wave) | \( \propto 1/r \)          | Strictly at\( c \)                              |
 
 In this simulator:
+
 - Newtonian tidal field (Tendex static part) uses instantaneous positions (PN 0th order)
 - Gravitational wave radiative field uses retarded time \( t_{\text{ret}} = t - r/c \)
 - `WAVE_SPEED = c = 1` (natural units)
@@ -160,6 +163,7 @@ Equivalently, a density criterion:
 - \( M_{\text{bh}} > M_H \): stars cross the horizon intact and are swallowed whole
 
 **This simulator's branching logic**:
+
 - If \( d_{\text{Roche}} > r_s \) (large/low-density bodies): Roche disruption path, producing 60 debris particles forming an accretion disk around the black hole
 - If \( d_{\text{Roche}} < r_s \) (compact bodies like neutron stars, white dwarfs): direct absorption
 
@@ -217,21 +221,22 @@ src/
 ### Key Modules
 
 - **[physics/mod.rs](src/physics/mod.rs)** - Core physics:
+
   - `gw_radiation_reaction()` - Peters 1964 formula implementation, with plunge phase enhancement
   - `update_black_holes/bodies/debris()` - Gravity + radiation damping updates for three body types
-
 - **[physics/grid.rs](src/physics/grid.rs)** - Tendex line spacetime curvature visualization:
+
   - `compute_tidal_tensor()` - Computes tidal tensor \( E_{jk} \) (with retarded GW contribution)
   - `update_grid_points()` - Eigendecomposition + temporal smoothing (approximating PN tail terms)
   - `get_tendex_render_data()` - Generates camera-facing quad ribbon vertices (intensity-driven thickness & opacity, three-planes mode)
-
 - **[physics/collision.rs](src/physics/collision.rs)** - Collisions and evolution:
+
   - `check_mergers()` - ISCO-based merger criterion
   - `check_event_horizon_absorption()` - Hills-mass branching: disruption vs. absorption
   - `check_roche_disruption()` - Roche-limit disruption producing accretion disks
   - `check_body_collisions()` - Body collision fragmentation based on Q*_D scaling law
-
 - **[renderer/shaders.rs](src/renderer/shaders.rs)** - WGSL shaders:
+
   - `perturbed_photon_sphere()` - Photon sphere deformation (companion perturbation)
   - `compute_lensed_direction()` - Gravitational lensing ray bending
   - `star_field()` - Procedural starfield (with Milky Way band, nebulae)
@@ -260,6 +265,7 @@ cargo run --release
 ## References
 
 ### Gravitational Wave Radiation and Inspiral
+
 1. **Peters, P. C.** (1964). "Gravitational Radiation and the Motion of Two Point Masses." *Physical Review*, 136(4B), B1224-B1232. — **Core formula source**
 2. **Blanchet, L.** (2014). "Gravitational Radiation from Post-Newtonian Sources and Inspiralling Compact Binaries." *Living Reviews in Relativity*, 17, 2. arXiv:1310.1528. — PN expansion and retardation
 3. **Blanchet, L. & Iyer, B. R.** (2003). "Third post-Newtonian dynamics of compact binaries." *Class. Quantum Grav.*, 20, 755. — 3PN ISCO criterion
@@ -267,10 +273,12 @@ cargo run --release
 5. **Buonanno, A., Cook, G. B. & Pretorius, F.** (2007). "Inspiral, plunge, merger, ringdown waveform of black-hole binaries." *Phys. Rev. D*, 75, 124018. arXiv:gr-qc/0610122.
 
 ### ISCO and Black Hole Merger
+
 6. **Barack, L. & Sago, N.** (2007). "Gravitational self-force on a particle in circular orbit around a Schwarzschild black hole." *Phys. Rev. D*, 75, 064021. — GSF ISCO offset \( \alpha = 1.2512 \)
 7. **Favata, M.** (2010). "Conservative self-force correction to the innermost stable circular orbit." *Phys. Rev. D*, 83, 024028.
 
 ### Photon Sphere and Gravitational Lensing
+
 8. **Synge, J. L.** (1966). "The escape of photons from gravitationally intense stars." *Mon. Not. R. Astron. Soc.*, 131, 463. — \( b_c = 3\sqrt{3} M \)
 9. **Erdl, H. & Schneider, P.** (1993). "The gravitational lensing in the binary black hole system." *Astronomy & Astrophysics*, 268, L9. — Binary black hole lensing
 10. **Patil, S. P., Mishra, M. & Narasimha, B. P.** (2016). "Curious case of gravitational lensing by binary black holes." arXiv:1610.04863. — Dual photon sphere merger
@@ -280,27 +288,32 @@ cargo run --release
 14. **Keeton, C. R. & Petters, A. O.** (2005). "Formalism for testing theories of gravity using lensing by compact objects." *Phys. Rev. D*, 72, 104006. — Second-order deflection
 
 ### Gravitational Wave Propagation Speed
+
 15. **Einstein, A.** (1916, 1918). "Näherungsweise Integration der Feldgleichungen / Über Gravitationswellen." *Sitzungsber. K. Preuss. Akad. Wiss.* — GWs propagate at c
 16. **Abbott, B. P. et al.** (2017). "Gravitational Waves and Gamma-Rays from a Binary Neutron Star Merger: GW170817 and GRB 170817A." *Astrophysical Journal Letters*, 848, L13. — \( v_{\text{gw}} = c \) to \( 10^{-15} \)
 17. **Will, C. M.** (1998). "Bounding the mass of the graviton using gravitational-wave observations." *Phys. Rev. D*, 57, 2061. arXiv:gr-qc/9709011.
 
 ### Tidal Disruption
+
 18. **Rees, M. J.** (1988). "Tidal disruption of stars by black holes of 10⁶–10⁸ solar masses." *Nature*, 333, 523-528. — Hills mass
 19. **Hills, J. G.** (1975). "Possible power source of Seyfert galaxies and QSOs." *Nature*, 254, 295-298.
 20. **Kesden, M.** (2012). "Tidal-disruption rate of stars by spinning supermassive black holes." *Phys. Rev. D*, 86, 064026. — Spin dependence
 21. **Stone, N. C., Kesden, M., Cheng, R. M. & van Velzen, S.** (2019). "Stellar Tidal Disruption Events in General Relativity." *Gen. Rel. Grav.*, 51, 30. arXiv:1801.10180.
 
 ### Tidal Tensor and Visualization
+
 22. **Owen, R. et al.** (2011). "Frame-Dragging Vortexes and Tidal Tendexes Attached to Colliding Black Holes." *Physical Review Letters*, 106, 151101. arXiv:1012.4869. — Tendex lines
 23. **Nichols, D. A.** "Visualizations of Spacetime Curvature." https://dnichols1.github.io/visualizations/
 
 ### Foundational Textbooks
+
 24. **Maggiore, M.** (2008). *Gravitational Waves. Volume 1: Theory and Experiments.* Oxford University Press.
 25. **Misner, C. W., Thorne, K. S. & Wheeler, J. A.** (1973). *Gravitation.* W. H. Freeman.
 26. **Poisson, E. & Will, C. M.** (2014). *Gravity: Newtonian, Post-Newtonian, Relativistic.* Cambridge University Press.
 27. **Hamilton, A. J. S. & Lisle, J. P.** (2008). "The river model of black holes." *Am. J. Phys.*, 76, 519-532. arXiv:gr-qc/0411060.
 
 ### Observational Discoveries
+
 28. **Abbott, B. P. et al.** (2016). "Observation of Gravitational Waves from a Binary Black Hole Merger." *Physical Review Letters*, 116(6), 061102. — GW150914 first detection
 
 ## License

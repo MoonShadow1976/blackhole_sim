@@ -124,8 +124,7 @@ pub struct Simulation {
 
 impl Simulation {
     pub fn new() -> Self {
-        let grid_points =
-            Self::init_tendex_grid(DEFAULT_GRID_SIZE, DEFAULT_GRID_SPACING);
+        let grid_points = Self::init_tendex_grid(DEFAULT_GRID_SIZE, DEFAULT_GRID_SPACING);
         Self {
             black_holes: vec![BlackHole {
                 mass: 2.0,
@@ -267,8 +266,7 @@ impl Simulation {
                 // 引力波辐射反作用力 (天体-黑洞对)
                 // v_rel = v_bh - v_body (j=bh, i=body)
                 let v_rel = bh.vel - body.vel;
-                let (a_body_rad, _a_bh_rad) =
-                    gw_radiation_reaction(body.mass, bh.mass, r, v_rel);
+                let (a_body_rad, _a_bh_rad) = gw_radiation_reaction(body.mass, bh.mass, r, v_rel);
                 accelerations[i] += a_body_rad;
             }
             // 天体之间也有微弱引力

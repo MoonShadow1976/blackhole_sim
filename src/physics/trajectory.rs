@@ -2,7 +2,7 @@
 
 use nalgebra::Vector3;
 
-use super::{BlackHole, CelestialBody, G, Simulation, gw_radiation_reaction};
+use super::{gw_radiation_reaction, BlackHole, CelestialBody, Simulation, G};
 
 /// 轨迹数据：(黑洞轨迹, 天体轨迹)
 /// 每个元素是 Vec<Vec<Vector3>>（每条轨迹按时间排序的点列）
@@ -78,8 +78,7 @@ impl Simulation {
 
                     // 引力波辐射反作用力 (天体-黑洞对)
                     let v_rel = bh.vel - body.vel;
-                    let (a_body_rad, _) =
-                        gw_radiation_reaction(body.mass, bh.mass, r, v_rel);
+                    let (a_body_rad, _) = gw_radiation_reaction(body.mass, bh.mass, r, v_rel);
                     acc += a_body_rad;
                 }
                 body.vel += acc * dt_per_step;
@@ -166,8 +165,7 @@ impl Simulation {
                     acc += delta / r * G * bh.mass / (r * r);
 
                     let v_rel = bh.vel - body.vel;
-                    let (a_body_rad, _) =
-                        gw_radiation_reaction(body.mass, bh.mass, r, v_rel);
+                    let (a_body_rad, _) = gw_radiation_reaction(body.mass, bh.mass, r, v_rel);
                     acc += a_body_rad;
                 }
                 body.vel += acc * dt_per_step;
@@ -253,8 +251,7 @@ impl Simulation {
                     acc += delta / r * G * bh.mass / (r * r);
 
                     let v_rel = bh.vel - body.vel;
-                    let (a_body_rad, _) =
-                        gw_radiation_reaction(body.mass, bh.mass, r, v_rel);
+                    let (a_body_rad, _) = gw_radiation_reaction(body.mass, bh.mass, r, v_rel);
                     acc += a_body_rad;
                 }
                 body.vel += acc * dt_per_step;

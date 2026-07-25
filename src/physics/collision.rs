@@ -2,9 +2,7 @@
 
 use nalgebra::Vector3;
 
-use super::{
-    BlackHole, CelestialBody, DebrisParticle, G, MAX_BODIES, MAX_DEBRIS, Simulation,
-};
+use super::{BlackHole, CelestialBody, DebrisParticle, Simulation, G, MAX_BODIES, MAX_DEBRIS};
 
 impl Simulation {
     /// 黑洞合并检测
@@ -354,8 +352,7 @@ impl Simulation {
             let tangent = orbital_plane_normal.cross(&radial).normalize();
             let radial_perp = radial.cross(&tangent).normalize();
             // 碎片在轨道平面上的位置（以黑洞为参考，距离 = orbit_r，角度 = angle）
-            let pos_in_plane = radial * angle.cos() * orbit_r
-                + radial_perp * angle.sin() * orbit_r;
+            let pos_in_plane = radial * angle.cos() * orbit_r + radial_perp * angle.sin() * orbit_r;
             let particle_pos = bh.pos - pos_in_plane; // 从黑洞指向碎片
 
             // 轨道速度（开普勒速度），切向
