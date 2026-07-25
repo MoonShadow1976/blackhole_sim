@@ -1,0 +1,14 @@
+[package]
+name = "blackhole_sim"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wgpu = "24"
+winit = "0.30"
+egui = "0.31"
+egui-wgpu = "0.31"
+egui-winit = "0.31"
+nalgebra = "0.33"
+bytemuck = { version = "1", features = ["derive"] }
+pollster = "0.4"
