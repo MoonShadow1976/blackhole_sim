@@ -23,10 +23,10 @@ pub struct RenderParams<'a> {
     pub trails: &'a [TrailInstance],
     pub preview_black_hole: Option<(Vector3<f32>, f32)>,
     pub preview_body: Option<([f32; 3], f32)>,
-    /// Tendex 线渲染数据：(位置[xyz], color_sign)
-    /// color_sign: +1.0 = 拉伸（红），-1.0 = 压缩（蓝）
-    /// 每 2 个连续顶点构成一条线段（LineList 拓扑）
-    pub tendex_data: &'a [([f32; 3], f32)],
+    /// Tendex 线渲染数据：四边形 ribbon 形式
+    /// (center[xyz], line_dir[xyz], half_len, corner[xy], color_sign, intensity, base_thickness)
+    /// 每 6 个顶点构成一条线（2 个三角形）
+    pub tendex_data: &'a [([f32; 3], [f32; 3], f32, [f32; 2], f32, f32, f32)],
 }
 
 /// wgpu 渲染器
@@ -63,16 +63,24 @@ pub struct Renderer {
 
 impl Renderer {
     /// 更新 Tendex 顶点缓冲（每帧调用）
-    /// data: (位置[xyz], color_sign)，每 2 个顶点构成一条线段（LineList）
-    /// 顶点数受 MAX_TENDEX_VERTICES (100000) 限制
-    pub fn update_tendex_buffer(&mut self, data: &[([f32; 3], f32)]) {
-        const MAX_TENDEX_VERTICES: usize = 100000;
+    /// data: 四边形 ribbon 顶点数据，每 6 个顶点一条线（2 个三角形）
+    /// 顶点数受 MAX_TENDEX_VERTICES (300000) 限制
+    pub fn update_tendex_buffer(
+        &mut self,
+        data: &[([f32; 3], [f32; 3], f32, [f32; 2], f32, f32, f32)],
+    ) {
+        const MAX_TENDEX_VERTICES: usize = 300000;
         let take = data.len().min(MAX_TENDEX_VERTICES);
         let vertices: Vec<TendexVertex> = data[..take]
             .iter()
-            .map(|(pos, sign)| TendexVertex {
-                position: *pos,
+            .map(|(center, line_dir, half_len, corner, sign, intensity, base_thick)| TendexVertex {
+                center: *center,
+                line_dir: *line_dir,
+                half_len: *half_len,
+                corner: *corner,
                 color_sign: *sign,
+                intensity: *intensity,
+                base_thickness: *base_thick,
             })
             .collect();
         self.tendex_vertex_count = vertices.len() as u32;
@@ -378,7 +386,7 @@ impl Renderer {
                 render_pass.set_pipeline(&self.tendex_pipeline);
                 render_pass.set_bind_group(0, &self.bind_group, &[0]);
                 render_pass.set_vertex_buffer(0, self.tendex_vertex_buffer.slice(..));
-                // LineList 拓扑：每对相邻顶点形成一条线段，无需索引缓冲
+                // TriangleList 拓扑：每条线 6 顶点（2 三角形），无需索引缓冲
                 render_pass.draw(0..self.tendex_vertex_count, 0..1);
             }
 

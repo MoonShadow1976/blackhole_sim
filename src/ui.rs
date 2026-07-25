@@ -98,6 +98,7 @@ impl App {
         let bh_count = self.sim.black_hole_count();
 
         let mut show_waves = self.ui_show_waves;
+        let mut three_planes = self.sim.tendex_three_planes;
         let mut show_background = self.ui_show_background;
         let mut show_bodies = self.ui_show_bodies;
         let mut show_trails = self.ui_show_trails;
@@ -226,6 +227,8 @@ impl App {
                             .text("格点间距")
                             .step_by(0.5),
                     );
+
+                    ui.checkbox(&mut three_planes, "仅三正交面");
 
                     self.sim
                         .set_grid_params(grid_size_i as usize, grid_spacing_f);
@@ -418,6 +421,7 @@ impl App {
         self.ui_body_vel_z = body_vz;
 
         self.sim.show_gravity_waves = show_waves;
+        self.sim.tendex_three_planes = three_planes;
         self.sim.sim_speed = sim_speed;
         self.sim.paused = paused;
 

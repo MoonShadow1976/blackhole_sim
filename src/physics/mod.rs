@@ -37,6 +37,10 @@ pub(crate) const MAX_DEBRIS: usize = 600;
 /// 并最终合并。当 r 减小时辐射功率急剧增大（∝ 1/r⁴），产生
 /// 频率逐渐升高的"啁啾"（chirp）信号。
 ///
+/// Plunge 阶段增强：当 r < r_ISCO ≈ 6M 时（M=m_i+m_j），轨道不再稳定，
+/// 黑洞进入快速 plunging 阶段。本模拟在 r < 3M 时线性增强反作用力系数
+/// （最高 ×3），模拟近合并阶段的非线性效应。
+///
 /// 参数:
 /// - m_i, m_j: 两体质量
 /// - r: 两体间距
@@ -49,14 +53,25 @@ pub(crate) fn gw_radiation_reaction(
     r: f32,
     v_rel: Vector3<f32>,
 ) -> (Vector3<f32>, Vector3<f32>) {
+    let m_total = m_i + m_j;
     // 限制最小有效距离，避免 1/r⁴ 在小间距下数值发散
-    // 取 r 与总 Schwarzschild 半径 (2*(m_i+m_j)) 的较大者作为有效距离
-    // 对主物理循环：合并检测会在 r ≈ 1.8*(m_i+m_j) 时合并黑洞，不影响结果
-    // 对轨迹预测：防止黑盒在小 r 时数值爆炸
-    let r_floor = 2.0 * (m_i + m_j).max(1.0);
+    // 取 r 与 0.5*(m_i+m_j) 的较大者（合并阈值附近，避免数值爆炸）
+    let r_floor = 0.5 * m_total.max(1.0);
     let r_eff = r.max(r_floor);
     let r4 = r_eff * r_eff * r_eff * r_eff;
-    let coeff = (32.0 / 5.0) / r4;
+    let mut coeff = (32.0 / 5.0) / r4;
+
+    // Plunge 阶段增强：r < 3M 时（M=m_i+m_j，对应 0.75*(rs1+rs2)）
+    // 轨道已过 ISCO，进入非线性 plunge。线性增强反作用力至最高 3 倍。
+    let r_isco = 6.0 * m_total; // ISCO ≈ 6M (试验粒子近似)
+    let r_plunge = 3.0 * m_total; // plunge 强增强起点
+    if r < r_plunge {
+        let t = ((r_plunge - r) / (r_plunge - r_floor).max(0.01)).clamp(0.0, 1.0);
+        coeff *= 1.0 + 2.0 * t; // 1× ~ 3×
+    }
+    // r_isco 仅用于文档/调试，此处不直接使用
+    let _ = r_isco;
+
     let a_i = v_rel * (coeff * m_i * m_j * m_j);
     let a_j = v_rel * (-coeff * m_i * m_i * m_j);
     (a_i, a_j)
@@ -102,6 +117,7 @@ pub struct Simulation {
     pub grid_spacing: f32,
     pub time: f32,
     pub show_gravity_waves: bool,
+    pub tendex_three_planes: bool,
     pub sim_speed: f32,
     pub paused: bool,
 }
@@ -124,6 +140,7 @@ impl Simulation {
             grid_spacing: DEFAULT_GRID_SPACING,
             time: 0.0,
             show_gravity_waves: false,
+            tendex_three_planes: false,
             sim_speed: 0.5,
             paused: true,
         }

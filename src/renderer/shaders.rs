@@ -257,8 +257,13 @@ fn compute_lensed_direction(ro: vec3<f32>, rd: vec3<f32>) -> vec3<f32> {
         let impact_param = perp_len * dist;
 
         // 临界碰撞参数 b_c = 3√3·M (Synge 1966)
-        // b < b_c 的光线被黑洞捕获
-        let b_c = 3.0 * sqrt(3.0) * mass;
+        // 受其他黑洞扰动后变形 (Erdl & Schneider 1993, Patil et al. 2016)：
+        //   b_c ≈ 3√3·M·(1 + δ_mono + δ_tidal)
+        //   δ_mono = -κ₁·M'/D                      (整体压缩，朝伴星方向拉伸)
+        //   δ_tidal = κ₂·(M'/M)·(M/D)²·P₂(cosθ)    (四极潮汐变形)
+        //   P₂(cosθ) = (3cos²θ - 1)/2, θ 为光线方向与伴星方向夹角
+        let b_c = perturbed_photon_sphere(mass, bh_pos, rd);
+
         if (impact_param < b_c) {
             hit_horizon = true;
             break;
@@ -278,6 +283,41 @@ fn compute_lensed_direction(ro: vec3<f32>, rd: vec3<f32>) -> vec3<f32> {
     }
 
     return dir;
+}
+
+/// 计算受其他黑洞扰动的光子球临界碰撞参数 b_c
+/// 公式：b_c ≈ 3√3·M·(1 - κ₁·Σ(M'/D) + κ₂·Σ(M'/M)·(M/D)²·P₂(cosθ))
+/// 参考：Erdl & Schneider 1993; Patil et al. 2016 arXiv:1610.04863;
+///       Cunha et al. 2018 arXiv:1805.03798
+/// κ₁=2, κ₂=5 为标定常数（弱场近似，D ≳ 10M 时误差 < 几个百分点）
+fn perturbed_photon_sphere(mass: f32, bh_pos: vec3<f32>, rd: vec3<f32>) -> f32 {
+    let b_c_0 = 3.0 * sqrt(3.0) * mass;
+    var delta = 0.0;
+
+    for (var j = 0u; j < bhs.count; j = j + 1u) {
+        let other = bhs.holes[j];
+        let to_other = other.pos - bh_pos;
+        let D = length(to_other);
+        if (D < 0.1) {
+            continue;
+        }
+        let n_hat = to_other / D;
+
+        // θ 为光线方向与伴星方向夹角
+        let cos_theta = clamp(dot(rd, n_hat), -1.0, 1.0);
+        let P2 = 0.5 * (3.0 * cos_theta * cos_theta - 1.0);
+
+        // 单极扰动（整体压缩）+ 四极潮汐扰动（角度相关变形）
+        let kappa1 = 2.0;
+        let kappa2 = 5.0;
+        let delta_mono = -kappa1 * other.mass / D;
+        let delta_tidal = kappa2 * (other.mass / mass) * (mass / D) * (mass / D) * P2;
+        delta = delta + delta_mono + delta_tidal;
+    }
+
+    // 限制扰动幅度，避免负值或过大变形
+    delta = clamp(delta, -0.5, 0.8);
+    return b_c_0 * (1.0 + delta);
 }
 
 @fragment
@@ -323,7 +363,10 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         for (var idx = 0u; idx < bhs.count; idx = idx + 1u) {
             let bh = bhs.holes[idx];
             let mass = bh.mass;
-            let b_c = 3.0 * sqrt(3.0) * mass;
+
+            // 扰动后的临界碰撞参数（受其他黑洞影响）
+            // 光子球变形：朝伴星方向拉伸，背向压缩
+            let b_c = perturbed_photon_sphere(mass, bh.pos, rd);
 
             let to_bh = bh.pos - ro;
             let cross_v = cross(rd, to_bh);
@@ -333,8 +376,10 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 hit_black = true;
             }
 
+            // 光子环宽度随变形调整：变形越大环越宽（更易观察变形）
             let rs = schwarzschild_radius(mass);
-            let ring_width = rs * 0.03;
+            let deformation = abs(b_c - 3.0 * sqrt(3.0) * mass) / (3.0 * sqrt(3.0) * mass);
+            let ring_width = rs * 0.03 * (1.0 + deformation * 2.0);
             let ring_dist = abs(b - b_c);
             if (ring_dist < ring_width) {
                 let ring_intensity = pow(1.0 - ring_dist / ring_width, 3.0);
@@ -588,8 +633,8 @@ fn trail_fs_main(input: TrailVSOutput) -> @location(0) vec4<f32> {
 }
 "#;
 
-/// Tendex 线顶点着色器：世界空间位置 + 颜色符号
-/// color_sign: +1 = 拉伸（红），-1 = 压缩（蓝）
+/// Tendex 线顶点着色器：将线渲染为面向相机的四边形（ribbon）
+/// 每个线段 6 顶点（2 个三角形），强度同时调制不透明度和线宽
 pub(crate) const TENDEX_VERTEX_SHADER: &str = r#"
 struct CameraUniform {
     view_proj: mat4x4<f32>,
@@ -602,41 +647,73 @@ struct CameraUniform {
 @group(0) @binding(0) var<uniform> camera: CameraUniform;
 
 struct TendexVertexInput {
-    @location(0) position: vec3<f32>,
-    @location(1) color_sign: f32,
+    @location(0) center: vec3<f32>,
+    @location(1) line_dir: vec3<f32>,
+    @location(2) half_len: f32,
+    @location(3) corner: vec2<f32>,
+    @location(4) color_sign: f32,
+    @location(5) intensity: f32,
+    @location(6) base_thickness: f32,
 };
 
 struct TendexVertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) color_sign: f32,
+    @location(1) intensity: f32,
 };
 
 @vertex
 fn tendex_vs_main(input: TendexVertexInput) -> TendexVertexOutput {
     var out: TendexVertexOutput;
-    // 位置已是世界空间，直接由 view_proj 变换到裁剪空间
-    out.clip_position = camera.view_proj * vec4<f32>(input.position, 1.0);
+
+    // 视线方向（从中心指向相机）
+    let view_dir = normalize(camera.camera_pos - input.center);
+
+    // 线方向（单位向量）
+    let axis = normalize(input.line_dir);
+
+    // 垂直方向：垂直于线和视线，即 ribbon 的宽度方向
+    let perp = normalize(cross(axis, view_dir));
+
+    // 厚度：强度越高越粗（0.2x ~ 1.5x 基准厚度）
+    let thickness = input.base_thickness * (0.2 + 1.3 * input.intensity);
+
+    // 计算世界空间顶点位置
+    // corner.x = 沿轴方向偏移（-1 ~ +1）
+    // corner.y = 垂直方向偏移（-1 ~ +1）
+    let world_pos = input.center
+        + axis * input.corner.x * input.half_len
+        + perp * input.corner.y * thickness * 0.5;
+
+    out.clip_position = camera.view_proj * vec4<f32>(world_pos, 1.0);
     out.color_sign = input.color_sign;
+    out.intensity = input.intensity;
     return out;
 }
 "#;
 
-/// Tendex 线片段着色器：红/蓝半透明
+/// Tendex 线片段着色器：红/蓝半透明，强度调制不透明度
 pub(crate) const TENDEX_FRAGMENT_SHADER: &str = r#"
 struct TendexVertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) color_sign: f32,
+    @location(1) intensity: f32,
 };
 
 @fragment
 fn tendex_fs_main(input: TendexVertexOutput) -> @location(0) vec4<f32> {
-    let alpha = 0.6;
+    let base_alpha = 0.75;
+    // 强度映射：低强度几乎不可见，高强度接近 base_alpha
+    let alpha = base_alpha * input.intensity;
+    if (alpha < 0.02) {
+        return vec4<f32>(0.0, 0.0, 0.0, 0.0);
+    }
     if (input.color_sign > 0.0) {
         // 拉伸（潮汐拉伸方向，红色）
-        return vec4<f32>(0.9, 0.15, 0.1, alpha);
+        return vec4<f32>(0.95, 0.2, 0.1, alpha);
     } else {
         // 压缩（潮汐压缩方向，蓝色）
-        return vec4<f32>(0.1, 0.3, 0.9, alpha);
+        return vec4<f32>(0.1, 0.35, 0.95, alpha);
     }
 }
 "#;

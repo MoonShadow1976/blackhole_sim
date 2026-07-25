@@ -580,7 +580,7 @@ impl Renderer {
                 })],
             }),
             primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::LineList,
+                topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: None,
@@ -605,8 +605,8 @@ impl Renderer {
         });
 
         // Tendex 顶点缓冲：固定大小，每帧通过 write_buffer 更新
-        // 20*20*20 采样点 * 3 线段/点 * 2 顶点/线段 = 96000 顶点，向上取整到 100000
-        const MAX_TENDEX_VERTICES: u64 = 100000;
+        // 20*20*20 采样点 * 3 线段/点 * 6 顶点/线段 = 144000 顶点，向上取整到 300000
+        const MAX_TENDEX_VERTICES: u64 = 300000;
         let tendex_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Tendex 顶点缓冲"),
             size: MAX_TENDEX_VERTICES * std::mem::size_of::<TendexVertex>() as u64,

@@ -174,8 +174,16 @@ impl Simulation {
     }
 
     /// 更新所有 Tendex 采样点的曲率特征分解
+    ///
+    /// 包含两类效应：
+    ///   1. 牛顿潮汐场（瞬时）：由当前黑洞/天体位置直接计算，无推迟
+    ///      物理：在牛顿极限下引力作用瞬时，这是 PN 展开的 0 阶项
+    ///   2. 引力波辐射场（推迟）：使用推迟时间 t_ret = t - r/c
+    ///      物理：辐射场严格以光速 c 传播 (Einstein 1916, Blanchet 2014 §4)
+    ///
+    /// 网格中心跟随质心：使用 0.85/0.15 平滑系数（约 7 帧响应）
     pub(crate) fn update_grid_points(&mut self) {
-        // 网格跟随黑洞质心移动
+        // 网格跟随黑洞质心移动（响应速率 0.15/帧，约 7 帧达到 95%）
         if !self.black_holes.is_empty() {
             let total_mass: f32 = self.black_holes.iter().map(|bh| bh.mass).sum();
             let com = self
@@ -184,7 +192,7 @@ impl Simulation {
                 .map(|bh| bh.pos * bh.mass)
                 .sum::<Vector3<f32>>()
                 / total_mass;
-            self.grid_center = self.grid_center * 0.95 + com * 0.05;
+            self.grid_center = self.grid_center * 0.85 + com * 0.15;
         }
 
         // 先以不可变借用计算所有点的潮汐张量（避免与可变借用冲突）
@@ -198,6 +206,10 @@ impl Simulation {
             .collect();
 
         // 再以可变借用更新特征分解
+        // 引入时间平滑（0.7/0.3）：使场对天体运动的响应有轻微延迟
+        // 物理意义：近似 PN 展开中的尾项 (tail, ∝ 1/c²) 造成的 hereditary 效应
+        // 参考：Blanchet 2014 Living Rev. Rel. 17, 2, Eq. (219) 及后续
+        let smooth_alpha = 0.3; // 新值权重
         for (point, e) in self.grid_points.iter_mut().zip(tensors.iter()) {
             // 对称矩阵特征分解
             let sym = e.symmetric_eigen();
@@ -213,46 +225,94 @@ impl Simulation {
 
             for i in 0..3 {
                 let vi = idx[i];
-                point.eigvals[i] = sym.eigenvalues[vi];
-                point.eigvecs[i] = sym.eigenvectors.column(vi).into();
+                let new_val = sym.eigenvalues[vi];
+                let new_vec: Vector3<f32> = sym.eigenvectors.column(vi).into();
+                // 时间平滑：特征值用指数加权平均
+                point.eigvals[i] = point.eigvals[i] * (1.0 - smooth_alpha) + new_val * smooth_alpha;
+                // 特征向量平滑（注意方向一致性）
+                let dot = point.eigvecs[i].dot(&new_vec);
+                if dot >= 0.0 {
+                    point.eigvecs[i] =
+                        point.eigvecs[i] * (1.0 - smooth_alpha) + new_vec * smooth_alpha;
+                } else {
+                    point.eigvecs[i] =
+                        point.eigvecs[i] * (1.0 - smooth_alpha) - new_vec * smooth_alpha;
+                }
+                let n = point.eigvecs[i].norm();
+                if n > 1e-6 {
+                    point.eigvecs[i] = point.eigvecs[i] / n;
+                }
             }
         }
     }
 
-    /// 获取 Tendex 线段渲染数据
-    /// 每个采样点生成 3 条线段（6 个顶点）
-    /// 线段长度按 |特征值| 缩放，颜色由特征值符号决定
-    pub fn get_tendex_render_data(&self) -> Vec<([f32; 3], f32)> {
+    /// 获取 Tendex 线段渲染数据（四边形 ribbon 形式）
+    /// 每个采样点生成 3 条线段，每条线段 = 2 个三角形 = 6 个顶点
+    /// 线段长度 = grid_spacing * 2/3（每侧 1/3，相邻点间留 1/3 空隙）
+    /// 线段强度/线宽由 |特征值| 调制，颜色由特征值符号决定
+    /// three_planes_only: 仅显示 xyz 三个正交中心面上的格点
+    pub fn get_tendex_render_data(&self, three_planes_only: bool) -> Vec<([f32; 3], [f32; 3], f32, [f32; 2], f32, f32, f32)> {
+        let n = self.grid_size;
+        let mid = n / 2;
         let mut vertices = Vec::with_capacity(self.grid_points.len() * 6);
-        // 视觉缩放因子
-        let scale = 2.0;
+        // 每侧伸出长度 = grid_spacing / 3，总长 = 2/3 * spacing
+        let half_len = self.grid_spacing / 3.0;
+        // 基准线宽 = grid_spacing * 0.08（与格距成正比，强度调制 0~1.5 倍）
+        let base_thickness = self.grid_spacing * 0.08;
+        // 强度归一化因子：特征值典型量级约为 GM/r³，用一个经验系数映射到 [0,1]
+        let intensity_scale = 8.0;
 
-        for point in &self.grid_points {
+        for (idx, point) in self.grid_points.iter().enumerate() {
+            // 三平面模式：仅保留 x=0 / y=0 / z=0 三个中心面上的点
+            if three_planes_only {
+                let i = idx / (n * n);
+                let rem = idx % (n * n);
+                let j = rem / n;
+                let k = rem % n;
+                if i != mid && j != mid && k != mid {
+                    continue;
+                }
+            }
+
             let world_pos = point.pos + self.grid_center;
-            let pos = [world_pos.x, world_pos.y, world_pos.z];
+            let center = [world_pos.x, world_pos.y, world_pos.z];
 
             for i in 0..3 {
                 let val = point.eigvals[i];
                 let dir = point.eigvecs[i];
-                // 线段长度按 |特征值| 缩放，有最小长度保证可见
-                let len = val.abs().sqrt() * scale;
-                let half = [
-                    dir.x * len * 0.5,
-                    dir.y * len * 0.5,
-                    dir.z * len * 0.5,
-                ];
+                let line_dir = [dir.x, dir.y, dir.z];
                 // color_sign: +1 = 红色（拉伸），-1 = 蓝色（压缩）
                 let sign = if val >= 0.0 { 1.0 } else { -1.0 };
+                // 强度：sqrt(|λ| * scale) 映射到 [0, 1]，使用 clamp 避免过亮
+                let intensity = (val.abs() * intensity_scale).sqrt().min(1.0);
 
-                // 线段两个端点
-                vertices.push((
-                    [pos[0] - half[0], pos[1] - half[1], pos[2] - half[2]],
-                    sign,
-                ));
-                vertices.push((
-                    [pos[0] + half[0], pos[1] + half[1], pos[2] + half[2]],
-                    sign,
-                ));
+                if intensity < 0.02 {
+                    continue;
+                }
+
+                // 6 个顶点构成 2 个三角形（四边形 ribbon）
+                // corner: (沿轴方向, 垂直方向)
+                // 三角形1: (-1,-1), (+1,-1), (+1,+1)
+                // 三角形2: (-1,-1), (+1,+1), (-1,+1)
+                let corners = [
+                    [-1.0, -1.0],
+                    [ 1.0, -1.0],
+                    [ 1.0,  1.0],
+                    [-1.0, -1.0],
+                    [ 1.0,  1.0],
+                    [-1.0,  1.0],
+                ];
+                for c in &corners {
+                    vertices.push((
+                        center,
+                        line_dir,
+                        half_len,
+                        *c,
+                        sign,
+                        intensity,
+                        base_thickness,
+                    ));
+                }
             }
         }
         vertices

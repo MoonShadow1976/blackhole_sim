@@ -97,14 +97,23 @@ pub struct QuadVertex {
     pub position: [f32; 2],
 }
 
-/// Tendex 线顶点：世界空间位置 + 颜色符号
+/// Tendex 线顶点：世界空间位置 + 线方向 + 颜色符号 + 强度 + 角点偏移
+/// 每个线段渲染为面向相机的四边形（ribbon），由 2 个三角形（6 顶点）组成
+/// corner: (-1,-1)=左下, (+1,-1)=右下, (+1,+1)=右上, (-1,-1), (+1,+1), (-1,+1)
+///   corner.x = 沿 line_dir 方向（-1=近端，+1=远端），line_dir 为单位向量
+///   corner.y = 垂直于线和视线的方向（-1=一侧，+1=另一侧）
 /// color_sign: +1.0 = 拉伸（红），-1.0 = 压缩（蓝）
-/// LineList 拓扑：每两个相邻顶点构成一条线段
+/// intensity: 0.0~1.0，调制不透明度和线宽
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct TendexVertex {
-    pub position: [f32; 3],
+    pub center: [f32; 3],
+    pub line_dir: [f32; 3],
+    pub half_len: f32,
+    pub corner: [f32; 2],
     pub color_sign: f32,
+    pub intensity: f32,
+    pub base_thickness: f32,
 }
 
 impl TendexVertex {
@@ -122,6 +131,43 @@ impl TendexVertex {
                 wgpu::VertexAttribute {
                     offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
                     shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: (std::mem::size_of::<[f32; 3]>() * 2) as wgpu::BufferAddress,
+                    shader_location: 2,
+                    format: wgpu::VertexFormat::Float32,
+                },
+                wgpu::VertexAttribute {
+                    offset: (std::mem::size_of::<[f32; 3]>() * 2 + std::mem::size_of::<f32>())
+                        as wgpu::BufferAddress,
+                    shader_location: 3,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+                wgpu::VertexAttribute {
+                    offset: (std::mem::size_of::<[f32; 3]>() * 2
+                        + std::mem::size_of::<f32>()
+                        + std::mem::size_of::<[f32; 2]>())
+                        as wgpu::BufferAddress,
+                    shader_location: 4,
+                    format: wgpu::VertexFormat::Float32,
+                },
+                wgpu::VertexAttribute {
+                    offset: (std::mem::size_of::<[f32; 3]>() * 2
+                        + std::mem::size_of::<f32>()
+                        + std::mem::size_of::<[f32; 2]>()
+                        + std::mem::size_of::<f32>())
+                        as wgpu::BufferAddress,
+                    shader_location: 5,
+                    format: wgpu::VertexFormat::Float32,
+                },
+                wgpu::VertexAttribute {
+                    offset: (std::mem::size_of::<[f32; 3]>() * 2
+                        + std::mem::size_of::<f32>()
+                        + std::mem::size_of::<[f32; 2]>()
+                        + std::mem::size_of::<f32>() * 2)
+                        as wgpu::BufferAddress,
+                    shader_location: 6,
                     format: wgpu::VertexFormat::Float32,
                 },
             ],

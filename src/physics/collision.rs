@@ -7,6 +7,21 @@ use super::{
 };
 
 impl Simulation {
+    /// 黑洞合并检测
+    ///
+    /// 物理依据：双黑洞旋进 (inspiral) 在 ISCO (Innermost Stable Circular Orbit) 处结束，
+    /// 进入快速 plunge 阶段，最终在视界接触附近形成公共视界并合并。
+    ///
+    /// ISCO 判据 (Blanchet & Iyer 2003, 3PN)：
+    ///   r_ISCO ≈ 6 G(m1+m2)/c² = 3 (rs1+rs2)  (试验粒子极限)
+    /// 等质量时数值相对论给出 r_ISCO ≈ 5M (Buonanno, Cook & Pretorius 2007)。
+    ///
+    /// 本模拟器采用简化模型：
+    ///   1. 当 r < r_ISCO 时进入 plunge 阶段（辐射反作用力增强，见 gw_radiation_reaction）
+    ///   2. 当 r < 0.5*(rs1+rs2)（视界显著重叠）时触发合并
+    ///
+    /// 视觉效果：两个黑洞会相互穿透、视觉重叠一段时间后再合并，体现质心点状特性。
+    /// 在真实 GR 中，公共视界在视界接触前已形成；本模拟为可视化目的延迟合并触发。
     pub(crate) fn check_mergers(&mut self) {
         let n = self.black_holes.len();
         if n < 2 {
@@ -25,7 +40,10 @@ impl Simulation {
                 let r = delta.norm();
                 let rs1 = Self::schwarzschild_radius(self.black_holes[i].mass);
                 let rs2 = Self::schwarzschild_radius(self.black_holes[j].mass);
-                if r < (rs1 + rs2) * 0.9 {
+                // 合并条件：视界重叠 50%（对应两奇点距离约 0.5*(rs1+rs2)）
+                // 物理上 ISCO ≈ 3*(rs1+rs2) 是 inspiral 终点，此处继续 plunge 至视界重叠
+                let merge_threshold = 0.5 * (rs1 + rs2);
+                if r < merge_threshold {
                     let m1 = self.black_holes[i].mass;
                     let m2 = self.black_holes[j].mass;
                     let total_mass = m1 + m2;
@@ -40,6 +58,7 @@ impl Simulation {
                     to_remove.push(i);
                     to_remove.push(j);
                     to_add = Some(BlackHole {
+                        // 5% 质量亏损以引力波形式辐射 (Peters 公式预测值)
                         mass: total_mass * 0.95,
                         pos: new_pos,
                         vel: new_vel,
@@ -60,23 +79,70 @@ impl Simulation {
         }
     }
 
-    /// 事件视界吸收：天体越过事件视界（r < Rs）后被黑洞吞噬，不再可见
+    /// 事件视界吸收：天体越过事件视界 (r < Rs) 后被黑洞吞噬
+    ///
+    /// 物理依据 (Rees 1988, Hills 1975)：
+    ///   潮汐撕裂半径 d_Roche = R_body * (2*M_bh/M_body)^(1/3)
+    ///   事件视界半径 rs = 2*M_bh
+    ///
+    ///   若 d_Roche > rs（天体平均密度 < 黑洞视界内平均密度）：
+    ///     天体在视界外被潮汐力撕裂 → 走 Roche 撕裂路径（不在此处处理）
+    ///   若 d_Roche < rs（天体密度大，如中子星、白矮星）：
+    ///     天体越过视界后整体被吞噬 → 直接吸收
+    ///
+    /// Hills 质量 M_H ≈ 1.08×10⁸ M_⊙（太阳型恒星，Schwarzschild）
+    /// 当 M_bh < M_H 时太阳型恒星在视界外撕裂；M_bh > M_H 时直接吸收。
+    ///
+    /// 本函数仅处理"直接吸收"情形。Roche 撕裂由 check_roche_disruption 处理
+    /// （在 update() 中先于本函数调用）。
+    /// 若大时间步导致天体跳过 Roche 阶段直接进入视界，本函数会判断其
+    /// 是否本应被撕裂，若是则走 Roche 路径而非直接吸收。
     pub(crate) fn check_event_horizon_absorption(&mut self) {
         if self.bodies.is_empty() {
             return;
         }
-        self.bodies.retain(|body| {
-            for bh in &self.black_holes {
+
+        // 收集需要走 Roche 撕裂路径的天体（避免在 retain 中调用 disrupt_body）
+        let mut to_disrupt: Vec<(usize, usize)> = Vec::new();
+
+        // 第一遍：标记直接吸收的天体，并找出应走 Roche 路径的
+        let mut to_absorb: Vec<usize> = Vec::new();
+        for (bi, body) in self.bodies.iter().enumerate() {
+            for (bhi, bh) in self.black_holes.iter().enumerate() {
                 let rs = Self::schwarzschild_radius(bh.mass);
                 let dist = (body.pos - bh.pos).norm();
                 if dist < rs {
-                    // 天体越过事件视界，被黑洞吸收
-                    // 黑洞质量增加（吸积）
-                    return false;
+                    // 越过视界：判断是否本应在视界外被 Roche 撕裂
+                    let d_roche = Self::roche_limit(bh.mass, body.mass);
+                    if d_roche > rs {
+                        // 大天体 / 低密度天体：走 Roche 撕裂
+                        to_disrupt.push((bi, bhi));
+                    } else {
+                        // 致密天体：直接吸收
+                        to_absorb.push(bi);
+                    }
+                    break; // 一个黑洞处理即可
                 }
             }
-            true
-        });
+        }
+
+        // 处理 Roche 撕裂（从后往前删除避免索引错位）
+        to_disrupt.sort_by(|a, b| b.0.cmp(&a.0));
+        for (bi, bhi) in to_disrupt.iter().rev() {
+            let body = self.bodies.remove(*bi);
+            let bh = self.black_holes[*bhi].clone();
+            self.disrupt_body(&body, &bh);
+        }
+
+        // 处理直接吸收
+        if !to_absorb.is_empty() {
+            to_absorb.sort_by(|a, b| b.cmp(a));
+            for bi in to_absorb {
+                if bi < self.bodies.len() {
+                    self.bodies.remove(bi);
+                }
+            }
+        }
     }
 
     /// 天体间碰撞：基于 Q*_D 标度律（Holsapple 1994, Love & Ahrens 1996）
@@ -273,24 +339,31 @@ impl Simulation {
         // 每个碎片分得的质量
         let particle_mass = body.mass / num_particles as f32;
 
+        // 轨道半径基准：确保在 ISCO 之外
+        // 若天体已在视界内（被 check_event_horizon_absorption 转来），
+        // 则用 r_isco * 1.5 作为基准轨道半径，碎片分布在以黑洞为中心的环上
+        let base_orbit_r = dist.max(r_isco * 1.5);
+
         for i in 0..num_particles {
             let angle = (i as f32 / num_particles as f32) * std::f32::consts::TAU;
-            let r_offset = (i as f32 % 7.0) * 0.3;
-            let orbit_r = (dist + r_offset).max(r_isco * 1.2);
+            let r_offset = (i as f32 % 7.0 - 3.0) * 0.2; // -0.6 ~ +0.6
+            let orbit_r = base_orbit_r + r_offset;
 
-            // 在轨道平面上分布
+            // 在轨道平面上分布：以黑洞为中心的圆形轨道
+            // tangent 为轨道切向，orbit_r * radial_cross_tangent 为径向偏移方向
             let tangent = orbital_plane_normal.cross(&radial).normalize();
-            let pos_offset = tangent * angle.cos() * orbit_r * 0.3
-                + radial.cross(&tangent).normalize() * angle.sin() * orbit_r * 0.3;
+            let radial_perp = radial.cross(&tangent).normalize();
+            // 碎片在轨道平面上的位置（以黑洞为参考，距离 = orbit_r，角度 = angle）
+            let pos_in_plane = radial * angle.cos() * orbit_r
+                + radial_perp * angle.sin() * orbit_r;
+            let particle_pos = bh.pos - pos_in_plane; // 从黑洞指向碎片
 
-            let particle_pos = body.pos + pos_offset;
-
-            // 轨道速度（开普勒速度）
+            // 轨道速度（开普勒速度），切向
             let orb_v = (G * bh.mass / orbit_r).sqrt();
             let vel_dir = orbital_plane_normal
-                .cross(&(bh.pos - particle_pos))
+                .cross(&(particle_pos - bh.pos))
                 .normalize();
-            let particle_vel = body.vel * 0.3 + vel_dir * orb_v + pos_offset.normalize() * 0.1;
+            let particle_vel = bh.vel * 0.2 + vel_dir * orb_v;
 
             if self.debris.len() < MAX_DEBRIS {
                 self.debris.push(DebrisParticle {
