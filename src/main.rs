@@ -12,11 +12,7 @@ use std::time::Instant;
 
 #[cfg(target_family = "wasm")]
 fn perf_now_ms() -> f64 {
-    web_sys::window()
-        .unwrap()
-        .performance()
-        .unwrap()
-        .now()
+    web_sys::window().unwrap().performance().unwrap().now()
 }
 
 #[cfg(target_family = "wasm")]
@@ -260,13 +256,8 @@ impl ApplicationHandler<AppEvent> for App {
                 None,
                 None,
             );
-            let egui_renderer = EguiRenderer::new(
-                &renderer.device,
-                renderer.config.format,
-                None,
-                1,
-                true,
-            );
+            let egui_renderer =
+                EguiRenderer::new(&renderer.device, renderer.config.format, None, 1, true);
             self.renderer = Some(renderer);
             self.egui_state = Some(egui_state);
             self.egui_renderer = Some(egui_renderer);
@@ -288,13 +279,8 @@ impl ApplicationHandler<AppEvent> for App {
                     None,
                     None,
                 );
-                let egui_renderer = EguiRenderer::new(
-                    &renderer.device,
-                    renderer.config.format,
-                    None,
-                    1,
-                    true,
-                );
+                let egui_renderer =
+                    EguiRenderer::new(&renderer.device, renderer.config.format, None, 1, true);
                 let _ = proxy.send_event(WasmAppEvent::RendererReady {
                     renderer,
                     egui_state,
@@ -670,7 +656,11 @@ impl ApplicationHandler<AppEvent> for App {
     }
 
     #[cfg(target_family = "wasm")]
-    fn user_event(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop, event: WasmAppEvent) {
+    fn user_event(
+        &mut self,
+        _event_loop: &winit::event_loop::ActiveEventLoop,
+        event: WasmAppEvent,
+    ) {
         match event {
             WasmAppEvent::RendererReady {
                 renderer,
