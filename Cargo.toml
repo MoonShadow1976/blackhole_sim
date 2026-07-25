@@ -15,8 +15,9 @@ pollster = "0.4"
 wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 console_error_panic_hook = { version = "0.1", optional = true }
-web-sys = { version = "0.3", features = ["Window", "Document", "HtmlCanvasElement", "CssStyleDeclaration", "Performance"], optional = true }
+js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", features = ["Window", "Document", "HtmlCanvasElement", "CssStyleDeclaration", "Performance", "Response", "Request", "RequestInit", "RequestMode", "Headers"], optional = true }
 
 [features]
 default = []
-web = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:console_error_panic_hook", "dep:web-sys", "wgpu/webgl"]
+web = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:console_error_panic_hook", "dep:js-sys", "dep:web-sys", "wgpu/webgl"]

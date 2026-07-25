@@ -143,7 +143,7 @@ $$
 **标准 GR 结果**：引力波严格以光速 $c$ 传播 (Einstein 1916, 1918)。波动方程：
 
 $$
-\Box h_{\mu\nu} = -\frac{16\pi G}{c^4} T_{\mu\nu}, \quad \Box = -\partial_t^2 + c^2 \nabla^2
+\square h_{\mu\nu} = -\frac{16\pi G}{c^4} T_{\mu\nu}, \quad \square = -\partial_t^2 + c^2 \nabla^2
 $$
 
 **观测约束** (GW170817/GRB 170817A, Abbott et al. 2017)：

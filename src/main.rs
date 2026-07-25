@@ -66,6 +66,7 @@ enum WasmAppEvent {
         egui_state: egui_winit::State,
         egui_renderer: EguiRenderer,
     },
+    ChineseFontLoaded(Vec<u8>),
 }
 
 /// 应用状态
@@ -193,7 +194,7 @@ impl App {
             ui_body_vel_y: 0.0,
             ui_body_vel_z: 0.6,
             ui_show_trails: true,
-            ui_lang: UiLang::En,
+            ui_lang: UiLang::Zh,
         }
     }
 
@@ -232,7 +233,6 @@ impl ApplicationHandler<AppEvent> for App {
 
         #[cfg(target_family = "wasm")]
         {
-            use wasm_bindgen::JsCast;
             use winit::platform::web::WindowExtWebSys;
             let canvas = window.canvas().expect("winit window has no canvas");
             let style = canvas.style();
@@ -257,9 +257,19 @@ impl ApplicationHandler<AppEvent> for App {
         visuals.extreme_bg_color = egui::Color32::from_rgb(12, 14, 20);
         self.egui_ctx.set_visuals(visuals);
 
-        // 设置中文字体（Web 下用默认字体，不加载系统字体）
+        // 设置中文字体
         #[cfg(not(target_family = "wasm"))]
         setup_chinese_font(&self.egui_ctx);
+
+        #[cfg(target_family = "wasm")]
+        {
+            let proxy = self.event_proxy.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                if let Some(font_data) = load_chinese_font_async().await {
+                    let _ = proxy.send_event(WasmAppEvent::ChineseFontLoaded(font_data));
+                }
+            });
+        }
 
         self.window = Some(window);
         self.last_frame = Some(Instant::now());
@@ -691,6 +701,9 @@ impl ApplicationHandler<AppEvent> for App {
                 self.egui_state = Some(egui_state);
                 self.egui_renderer = Some(egui_renderer);
             }
+            WasmAppEvent::ChineseFontLoaded(font_data) => {
+                setup_chinese_font_from_data(&self.egui_ctx, &font_data);
+            }
         }
     }
 }
@@ -767,4 +780,78 @@ fn setup_chinese_font(ctx: &egui::Context) {
     }
 
     ctx.set_fonts(fonts);
+}
+
+/// 从字体数据设置中文字体（Wasm 端用）
+#[cfg(target_family = "wasm")]
+fn setup_chinese_font_from_data(ctx: &egui::Context, font_data: &[u8]) {
+    let mut fonts = egui::FontDefinitions::default();
+
+    fonts.font_data.insert(
+        "chinese_font".to_owned(),
+        std::sync::Arc::new(egui::FontData::from_owned(font_data.to_vec())),
+    );
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .insert(0, "chinese_font".to_owned());
+    fonts
+        .families
+        .entry(egui::FontFamily::Monospace)
+        .or_default()
+        .push("chinese_font".to_owned());
+
+    ctx.set_fonts(fonts);
+}
+
+/// 异步加载中文字体（Wasm 端从 CDN 加载）
+#[cfg(target_family = "wasm")]
+async fn load_chinese_font_async() -> Option<Vec<u8>> {
+    let font_urls = [
+        "https://cdn.jsdelivr.net/npm/notosans-sc@36.0.0/fonts/NotoSansSC-Regular.otf",
+        "https://fonts.gstatic.com/s/notosanssc/v36/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYxNbPzS5HE.0.woff2",
+    ];
+
+    for url in &font_urls {
+        if let Ok(data) = fetch_bytes(url).await {
+            return Some(data);
+        }
+    }
+
+    None
+}
+
+/// 通过 fetch API 加载二进制数据
+#[cfg(target_family = "wasm")]
+async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
+    use wasm_bindgen::JsCast;
+    use wasm_bindgen_futures::JsFuture;
+    use web_sys::{Request, RequestInit, RequestMode, Response};
+
+    let opts = RequestInit::new();
+    opts.set_method("GET");
+    opts.set_mode(RequestMode::Cors);
+
+    let request = Request::new_with_str_and_init(url, &opts).map_err(|e| format!("request error: {:?}", e))?;
+
+    let window = web_sys::window().ok_or("no window")?;
+    let resp_value = JsFuture::from(window.fetch_with_request(&request))
+        .await
+        .map_err(|e| format!("fetch error: {:?}", e))?;
+
+    let resp: Response = resp_value
+        .dyn_into()
+        .map_err(|e| format!("response cast error: {:?}", e))?;
+
+    if !resp.ok() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+
+    let buf = JsFuture::from(resp.array_buffer().map_err(|e| format!("array_buffer error: {:?}", e))?)
+        .await
+        .map_err(|e| format!("array_buffer future error: {:?}", e))?;
+
+    let array = js_sys::Uint8Array::new(&buf);
+    Ok(array.to_vec())
 }

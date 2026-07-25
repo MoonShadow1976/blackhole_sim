@@ -145,7 +145,7 @@ where $P_2(\cos\theta) = \frac{1}{2}(3\cos^2\theta - 1)$ is the second Legendre 
 **Standard GR result**: gravitational waves propagate exactly at the speed of light $c$ (Einstein 1916, 1918). Wave equation:
 
 $$
-\Box h_{\mu\nu} = -\frac{16\pi G}{c^4} T_{\mu\nu}, \quad \Box = -\partial_t^2 + c^2 \nabla^2
+\square h_{\mu\nu} = -\frac{16\pi G}{c^4} T_{\mu\nu}, \quad \square = -\partial_t^2 + c^2 \nabla^2
 $$
 
 **Observational constraint** (GW170817/GRB 170817A, Abbott et al. 2017):
