@@ -8,7 +8,15 @@ wgpu = "24"
 winit = "0.30"
 egui = "0.31"
 egui-wgpu = "0.31"
-egui-winit = "0.31"
+egui-winit = { version = "0.31", default-features = false }
 nalgebra = "0.33"
 bytemuck = { version = "1", features = ["derive"] }
 pollster = "0.4"
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }
+web-sys = { version = "0.3", features = ["Window", "Document", "HtmlCanvasElement", "CssStyleDeclaration"], optional = true }
+
+[features]
+default = []
+web = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:console_error_panic_hook", "dep:web-sys", "wgpu/webgl"]

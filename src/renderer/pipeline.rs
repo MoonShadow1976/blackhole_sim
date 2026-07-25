@@ -10,7 +10,7 @@ use wgpu::util::DeviceExt;
 use crate::geometry::{create_ring, create_sphere, Vertex};
 
 impl Renderer {
-    pub fn new(window: &'static winit::window::Window) -> Self {
+    pub async fn new(window: &'static winit::window::Window) -> Self {
         let instance_desc = wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
@@ -19,23 +19,27 @@ impl Renderer {
 
         let surface = instance.create_surface(window).expect("无法创建 surface");
 
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: Some(&surface),
-            force_fallback_adapter: false,
-        }))
-        .expect("无法找到合适的 GPU 适配器");
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
+            })
+            .await
+            .expect("无法找到合适的 GPU 适配器");
 
-        let (device, queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("GPU 设备"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
-                memory_hints: wgpu::MemoryHints::default(),
-            },
-            None,
-        ))
-        .expect("无法请求设备");
+        let (device, queue) = adapter
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    label: Some("GPU 设备"),
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::default(),
+                    memory_hints: wgpu::MemoryHints::default(),
+                },
+                None,
+            )
+            .await
+            .expect("无法请求设备");
 
         let size = window.inner_size();
         let surface_caps = surface.get_capabilities(&adapter);

@@ -18,10 +18,34 @@ use winit::{
     application::ApplicationHandler,
     dpi::PhysicalPosition,
     event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::ControlFlow,
     keyboard::{KeyCode, PhysicalKey},
     window::Window,
 };
+
+#[cfg(target_family = "wasm")]
+use winit::event_loop::{EventLoop, EventLoopProxy};
+
+#[cfg(not(target_family = "wasm"))]
+use winit::event_loop::EventLoop;
+
+#[cfg(target_family = "wasm")]
+use wasm_bindgen::prelude::*;
+
+#[cfg(target_family = "wasm")]
+type AppEvent = WasmAppEvent;
+
+#[cfg(not(target_family = "wasm"))]
+type AppEvent = ();
+
+#[cfg(target_family = "wasm")]
+enum WasmAppEvent {
+    RendererReady {
+        renderer: Renderer,
+        egui_state: egui_winit::State,
+        egui_renderer: EguiRenderer,
+    },
+}
 
 /// 应用状态
 struct App {
@@ -35,6 +59,8 @@ struct App {
     pub(crate) mouse_pressed: bool,
     pub(crate) last_mouse_pos: Option<PhysicalPosition<f64>>,
     pub(crate) window: Option<&'static Window>,
+    #[cfg(target_family = "wasm")]
+    pub(crate) event_proxy: EventLoopProxy<AppEvent>,
     // UI 临时状态
     pub(crate) ui_show_waves: bool,
     pub(crate) ui_show_background: bool,
@@ -63,6 +89,7 @@ struct App {
 }
 
 impl App {
+    #[cfg(not(target_family = "wasm"))]
     fn new() -> Self {
         let sim = Simulation::new();
         Self {
@@ -81,6 +108,45 @@ impl App {
             mouse_pressed: false,
             last_mouse_pos: None,
             window: None,
+            ui_reset: false,
+            ui_add_mass: 2.0,
+            ui_add_pos_x: 7.5,
+            ui_add_pos_y: 0.0,
+            ui_add_pos_z: 0.0,
+            ui_add_vel_x: 0.0,
+            ui_add_vel_y: 0.0,
+            ui_add_vel_z: -0.3,
+            ui_body_mass: 0.3,
+            ui_body_pos_x: 6.0,
+            ui_body_pos_y: 0.5,
+            ui_body_pos_z: 0.0,
+            ui_body_vel_x: 0.0,
+            ui_body_vel_y: 0.0,
+            ui_body_vel_z: 0.6,
+            ui_show_trails: true,
+        }
+    }
+
+    #[cfg(target_family = "wasm")]
+    fn new(event_proxy: EventLoopProxy<AppEvent>) -> Self {
+        let sim = Simulation::new();
+        Self {
+            renderer: None,
+            camera: OrbitCamera::new(),
+            ui_show_waves: sim.show_gravity_waves,
+            ui_show_background: true,
+            ui_show_bodies: true,
+            ui_sim_speed: sim.sim_speed,
+            ui_paused: sim.paused,
+            sim,
+            egui_ctx: egui::Context::default(),
+            egui_state: None,
+            egui_renderer: None,
+            last_frame: None,
+            mouse_pressed: false,
+            last_mouse_pos: None,
+            window: None,
+            event_proxy,
             ui_reset: false,
             ui_add_mass: 2.0,
             ui_add_pos_x: 7.5,
@@ -123,7 +189,7 @@ impl App {
     }
 }
 
-impl ApplicationHandler for App {
+impl ApplicationHandler<AppEvent> for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         let window_attrs = Window::default_attributes()
             .with_title("Black Hole Collision Simulation")
@@ -134,34 +200,73 @@ impl ApplicationHandler for App {
         let scale_factor = window.scale_factor();
         let window: &'static Window = Box::leak(Box::new(window));
 
-        let renderer = Renderer::new(window);
-
-        let egui_state = egui_winit::State::new(
-            self.egui_ctx.clone(),
-            egui::ViewportId::ROOT,
-            window,
-            Some(scale_factor as f32),
-            None,
-            None,
-        );
-
-        let egui_renderer =
-            EguiRenderer::new(&renderer.device, renderer.config.format, None, 1, true);
-
-        // 设置 egui 字体（加载系统中文字体）
-        setup_chinese_font(&self.egui_ctx);
-
         // 设置 egui 样式
         let mut visuals = egui::Visuals::dark();
         visuals.panel_fill = egui::Color32::from_rgb(20, 22, 30);
         visuals.extreme_bg_color = egui::Color32::from_rgb(12, 14, 20);
         self.egui_ctx.set_visuals(visuals);
 
-        self.renderer = Some(renderer);
-        self.egui_state = Some(egui_state);
-        self.egui_renderer = Some(egui_renderer);
+        // 设置中文字体（Web 下用默认字体，不加载系统字体）
+        #[cfg(not(target_family = "wasm"))]
+        setup_chinese_font(&self.egui_ctx);
+
         self.window = Some(window);
         self.last_frame = Some(Instant::now());
+
+        // 同步/异步初始化 renderer
+        #[cfg(not(target_family = "wasm"))]
+        {
+            let renderer = pollster::block_on(Renderer::new(window));
+            let egui_state = egui_winit::State::new(
+                self.egui_ctx.clone(),
+                egui::ViewportId::ROOT,
+                window,
+                Some(scale_factor as f32),
+                None,
+                None,
+            );
+            let egui_renderer = EguiRenderer::new(
+                &renderer.device,
+                renderer.config.format,
+                None,
+                1,
+                true,
+            );
+            self.renderer = Some(renderer);
+            self.egui_state = Some(egui_state);
+            self.egui_renderer = Some(egui_renderer);
+        }
+
+        #[cfg(target_family = "wasm")]
+        {
+            use wasm_bindgen_futures::spawn_local;
+            let proxy = self.event_proxy.clone();
+            let egui_ctx = self.egui_ctx.clone();
+            let scale_factor = scale_factor as f32;
+            spawn_local(async move {
+                let renderer = Renderer::new(window).await;
+                let egui_state = egui_winit::State::new(
+                    egui_ctx.clone(),
+                    egui::ViewportId::ROOT,
+                    window,
+                    Some(scale_factor),
+                    None,
+                    None,
+                );
+                let egui_renderer = EguiRenderer::new(
+                    &renderer.device,
+                    renderer.config.format,
+                    None,
+                    1,
+                    true,
+                );
+                let _ = proxy.send_event(WasmAppEvent::RendererReady {
+                    renderer,
+                    egui_state,
+                    egui_renderer,
+                });
+            });
+        }
     }
 
     fn window_event(
@@ -528,15 +633,57 @@ impl ApplicationHandler for App {
             window.request_redraw();
         }
     }
+
+    #[cfg(target_family = "wasm")]
+    fn user_event(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop, event: WasmAppEvent) {
+        match event {
+            WasmAppEvent::RendererReady {
+                renderer,
+                egui_state,
+                egui_renderer,
+            } => {
+                self.renderer = Some(renderer);
+                self.egui_state = Some(egui_state);
+                self.egui_renderer = Some(egui_renderer);
+            }
+        }
+    }
 }
 
+#[cfg(not(target_family = "wasm"))]
 fn main() {
-    let event_loop = EventLoop::new().expect("无法创建事件循环");
+    let event_loop = EventLoop::<AppEvent>::with_user_event()
+        .build()
+        .expect("无法创建事件循环");
     let mut app = App::new();
     event_loop.run_app(&mut app).expect("事件循环错误");
 }
 
+#[cfg(target_family = "wasm")]
+fn main() {
+    // WASM 入口在 #[wasm_bindgen(start)] 中
+}
+
+#[cfg(target_family = "wasm")]
+#[wasm_bindgen(start)]
+pub fn start() -> Result<(), JsValue> {
+    console_error_panic_hook::set_once();
+
+    let event_loop = EventLoop::<AppEvent>::with_user_event()
+        .build()
+        .expect("无法创建事件循环");
+    let proxy = event_loop.create_proxy();
+    let mut app = App::new(proxy);
+
+    wasm_bindgen_futures::spawn_local(async move {
+        let _ = event_loop.run_app(&mut app);
+    });
+
+    Ok(())
+}
+
 /// 设置中文字体（从 Windows 系统目录加载微软雅黑）
+#[cfg(not(target_family = "wasm"))]
 fn setup_chinese_font(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
 
