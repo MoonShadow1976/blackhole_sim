@@ -26,6 +26,7 @@ pub struct RenderParams<'a> {
     /// Tendex 线渲染数据：四边形 ribbon 形式
     /// (center[xyz], line_dir[xyz], half_len, corner[xy], color_sign, intensity, base_thickness)
     /// 每 6 个顶点构成一条线（2 个三角形）
+    #[allow(clippy::type_complexity)]
     pub tendex_data: &'a [([f32; 3], [f32; 3], f32, [f32; 2], f32, f32, f32)],
 }
 
@@ -65,6 +66,7 @@ impl Renderer {
     /// 更新 Tendex 顶点缓冲（每帧调用）
     /// data: 四边形 ribbon 顶点数据，每 6 个顶点一条线（2 个三角形）
     /// 顶点数受 MAX_TENDEX_VERTICES (300000) 限制
+    #[allow(clippy::type_complexity)]
     pub fn update_tendex_buffer(
         &mut self,
         data: &[([f32; 3], [f32; 3], f32, [f32; 2], f32, f32, f32)],

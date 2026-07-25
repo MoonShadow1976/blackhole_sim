@@ -223,8 +223,7 @@ impl Simulation {
                     .unwrap()
             });
 
-            for i in 0..3 {
-                let vi = idx[i];
+            for (i, &vi) in idx.iter().enumerate() {
                 let new_val = sym.eigenvalues[vi];
                 let new_vec: Vector3<f32> = sym.eigenvectors.column(vi).into();
                 // 时间平滑：特征值用指数加权平均
@@ -251,6 +250,7 @@ impl Simulation {
     /// 线段长度 = grid_spacing * 2/3（每侧 1/3，相邻点间留 1/3 空隙）
     /// 线段强度/线宽由 |特征值| 调制，颜色由特征值符号决定
     /// three_planes_only: 仅显示 xyz 三个正交中心面上的格点
+    #[allow(clippy::type_complexity)]
     pub fn get_tendex_render_data(
         &self,
         three_planes_only: bool,

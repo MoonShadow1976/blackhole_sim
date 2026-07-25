@@ -370,14 +370,20 @@ impl Simulation {
             .collect()
     }
 
-    pub fn phase_string(&self) -> String {
+    pub fn phase_string(&self, english: bool) -> String {
         let n = self.black_holes.len();
         let nb = self.bodies.len();
         let nd = self.debris.len();
         if n == 0 {
-            "空".to_string()
+            if english { "Empty".to_string() } else { "空".to_string() }
         } else if n == 1 && nb == 0 {
-            format!("单黑洞 (M={:.2})", self.black_holes[0].mass)
+            if english {
+                format!("Single BH (M={:.2})", self.black_holes[0].mass)
+            } else {
+                format!("单黑洞 (M={:.2})", self.black_holes[0].mass)
+            }
+        } else if english {
+            format!("{}BH {}Body {}Debris", n, nb, nd)
         } else {
             format!("{}黑洞 {}天体 {}碎片", n, nb, nd)
         }

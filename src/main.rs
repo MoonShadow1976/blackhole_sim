@@ -86,6 +86,14 @@ struct App {
     pub(crate) ui_body_vel_z: f32,
     // 轨迹预测
     pub(crate) ui_show_trails: bool,
+    // 界面语言
+    pub(crate) ui_lang: UiLang,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum UiLang {
+    Zh,
+    En,
 }
 
 impl App {
@@ -124,6 +132,7 @@ impl App {
             ui_body_vel_y: 0.0,
             ui_body_vel_z: 0.6,
             ui_show_trails: true,
+            ui_lang: UiLang::Zh,
         }
     }
 
@@ -163,6 +172,7 @@ impl App {
             ui_body_vel_y: 0.0,
             ui_body_vel_z: 0.6,
             ui_show_trails: true,
+            ui_lang: UiLang::Zh,
         }
     }
 
