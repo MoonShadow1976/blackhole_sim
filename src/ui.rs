@@ -136,9 +136,9 @@ impl App {
 
         let screen_width = self.egui_ctx.screen_rect().width();
         let panel_min_width = if screen_width < 768.0 {
-            screen_width * 0.85
+            screen_width * 0.8
         } else {
-            300.0
+            260.0
         };
 
         // 面板隐藏时，右上角显示悬浮切换按钮
@@ -169,48 +169,36 @@ impl App {
                         .show(ui, |ui| {
                             ui.add_space(8.0);
 
-                            // 标题
-                            ui.heading(t!(self, "🌌 黑洞模拟系统", "🌌 Black Hole Sim"));
-                            ui.label(
-                                egui::RichText::new(t!(
-                                    self,
-                                    "N体黑洞碰撞模拟",
-                                    "N-Body Black Hole Collision"
-                                ))
-                                .weak()
-                                .small(),
-                            );
-                            ui.add_space(6.0);
-
-                            // 语言切换 + 隐藏面板按钮
+                            // 标题 + 右上角按钮（语言切换 + 隐藏面板）
                             ui.horizontal(|ui| {
-                                let mut lang = self.ui_lang;
-                                let zh_selected = matches!(lang, UiLang::Zh);
-                                let en_selected = matches!(lang, UiLang::En);
-                                if ui
-                                    .selectable_label(zh_selected, "中文")
-                                    .on_hover_text(t!(self, "切换到中文", "Switch to Chinese"))
-                                    .clicked()
-                                {
-                                    lang = UiLang::Zh;
-                                }
-                                if ui
-                                    .selectable_label(en_selected, "EN")
-                                    .on_hover_text(t!(self, "切换到英文", "Switch to English"))
-                                    .clicked()
-                                {
-                                    lang = UiLang::En;
-                                }
-                                self.ui_lang = lang;
-
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                ui.heading(t!(self, "🌌 黑洞模拟", "🌌 BH Sim"));
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                                     if ui
-                                        .button(t!(self, "◀ 隐藏", "◀ Hide"))
-                                        .on_hover_text(t!(self, "隐藏控制面板", "Hide control panel"))
+                                        .small_button(t!(self, "◀", "◀"))
+                                        .on_hover_text(t!(self, "隐藏面板", "Hide panel"))
                                         .clicked()
                                     {
                                         self.ui_show_panel = false;
                                     }
+                                    ui.add_space(4.0);
+                                    let mut lang = self.ui_lang;
+                                    let zh_selected = matches!(lang, UiLang::Zh);
+                                    let en_selected = matches!(lang, UiLang::En);
+                                    if ui
+                                        .selectable_label(zh_selected, t!(self, "中", "Zh"))
+                                        .on_hover_text(t!(self, "切换到中文", "Switch to Chinese"))
+                                        .clicked()
+                                    {
+                                        lang = UiLang::Zh;
+                                    }
+                                    if ui
+                                        .selectable_label(en_selected, t!(self, "EN", "EN"))
+                                        .on_hover_text(t!(self, "切换到英文", "Switch to English"))
+                                        .clicked()
+                                    {
+                                        lang = UiLang::En;
+                                    }
+                                    self.ui_lang = lang;
                                 });
                             });
 
