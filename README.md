@@ -43,7 +43,7 @@ At each spatial sample point, we compute the three eigenvalues and eigenvectors 
 
 Since $E_{jk}$ is traceless ($\text{tr}(E) = 0$), the three eigenvalues sum to zero; stretching and compression directions are complementary.
 
-**Rendering**: Lines are rendered as camera-facing quad ribbons (TriangleList topology, 2 triangles = 6 vertices per line), with intensity driving both thickness ($0.2\times$ – $1.5\times$ base) and opacity ($0$ – $0.75$).
+**Rendering**: Lines are rendered as camera-facing quad ribbons (TriangleList topology, 2 triangles = 6 vertices per line), with intensity driving both thickness ($0.2\times$ ~ $1.5\times$ base) and opacity ($0$ ~ $0.75$).
 
 **Three-orthogonal-planes mode**: Instead of rendering the full 3D volume of grid points, you can toggle to show only the three central orthogonal planes (XY, YZ, XZ), producing a cleaner cross-section view. The grid center follows the mass-weighted centroid of all black holes with a smooth response (0.15 per frame, ~7 frames to 95%).
 
