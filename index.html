@@ -54,6 +54,27 @@
         <div style="font-size:14px;opacity:0.6;margin-top:8px;">Loading Black Hole Simulator...</div>
     </div>
     <div id="canvas-container"></div>
+    <script>
+        (function() {
+            const origError = console.error;
+            const ctrlFlowMsg = 'Using exceptions for control flow';
+            console.error = function(...args) {
+                if (args.length > 0 && typeof args[0] === 'string' && args[0].includes(ctrlFlowMsg)) {
+                    return;
+                }
+                if (args.length > 0 && args[0] instanceof Error && args[0].message.includes(ctrlFlowMsg)) {
+                    return;
+                }
+                origError.apply(console, args);
+            };
+            window.addEventListener('error', function(e) {
+                if (e.message && e.message.includes(ctrlFlowMsg)) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+        })();
+    </script>
     <script type="module">
         import init from './blackhole_sim.js';
         async function run() {
@@ -61,6 +82,10 @@
                 await init();
                 document.getElementById('loading').style.display = 'none';
             } catch (e) {
+                if (e.message && e.message.includes('Using exceptions for control flow')) {
+                    document.getElementById('loading').style.display = 'none';
+                    return;
+                }
                 document.getElementById('loading').innerHTML =
                     '<div style="color:#ff6b6b;">加载失败 / Load failed</div>' +
                     '<div style="font-size:14px;opacity:0.8;margin-top:8px;">' + e.message + '</div>';
