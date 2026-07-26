@@ -38,7 +38,7 @@ use egui_wgpu::Renderer as EguiRenderer;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalPosition,
-    event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent},
+    event::{ElementState, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent},
     event_loop::ControlFlow,
     keyboard::{KeyCode, PhysicalKey},
     window::Window,
@@ -80,6 +80,8 @@ struct App {
     pub(crate) last_frame: Option<Instant>,
     pub(crate) mouse_pressed: bool,
     pub(crate) last_mouse_pos: Option<PhysicalPosition<f64>>,
+    pub(crate) active_touches: Vec<(u64, PhysicalPosition<f64>)>,
+    pub(crate) last_pinch_dist: Option<f64>,
     pub(crate) window: Option<&'static Window>,
     #[cfg(target_family = "wasm")]
     pub(crate) event_proxy: EventLoopProxy<AppEvent>,
@@ -110,6 +112,8 @@ struct App {
     pub(crate) ui_show_trails: bool,
     // 界面语言
     pub(crate) ui_lang: UiLang,
+    // 控制面板显示状态
+    pub(crate) ui_show_panel: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -137,6 +141,8 @@ impl App {
             last_frame: None,
             mouse_pressed: false,
             last_mouse_pos: None,
+            active_touches: Vec::new(),
+            last_pinch_dist: None,
             window: None,
             ui_reset: false,
             ui_add_mass: 2.0,
@@ -155,6 +161,7 @@ impl App {
             ui_body_vel_z: 0.6,
             ui_show_trails: true,
             ui_lang: UiLang::Zh,
+            ui_show_panel: true,
         }
     }
 
@@ -176,6 +183,8 @@ impl App {
             last_frame: None,
             mouse_pressed: false,
             last_mouse_pos: None,
+            active_touches: Vec::new(),
+            last_pinch_dist: None,
             window: None,
             event_proxy,
             ui_reset: false,
@@ -195,6 +204,7 @@ impl App {
             ui_body_vel_z: 0.6,
             ui_show_trails: true,
             ui_lang: UiLang::Zh,
+            ui_show_panel: true,
         }
     }
 
@@ -390,6 +400,57 @@ impl ApplicationHandler<AppEvent> for App {
                         MouseScrollDelta::PixelDelta(pos) => -pos.y as f32 * 0.05,
                     };
                     self.camera.zoom(zoom_amount);
+                }
+            }
+            WindowEvent::Touch(touch) => {
+                if egui_consumed {
+                    return;
+                }
+                match touch.phase {
+                    TouchPhase::Started => {
+                        self.active_touches.push((touch.id, touch.location));
+                        if self.active_touches.len() == 2 {
+                            let p0 = self.active_touches[0].1;
+                            let p1 = self.active_touches[1].1;
+                            self.last_pinch_dist = Some(
+                                ((p0.x - p1.x).powi(2) + (p0.y - p1.y).powi(2)).sqrt(),
+                            );
+                        }
+                    }
+                    TouchPhase::Moved => {
+                        if let Some(entry) =
+                            self.active_touches.iter_mut().find(|(id, _)| *id == touch.id)
+                        {
+                            let old_pos = entry.1;
+                            entry.1 = touch.location;
+
+                            if self.active_touches.len() == 1 {
+                                let dx = touch.location.x - old_pos.x;
+                                let dy = touch.location.y - old_pos.y;
+                                let sensitivity = 0.005;
+                                self.camera.rotate_yaw(dx as f32 * sensitivity);
+                                self.camera.rotate_pitch(dy as f32 * sensitivity);
+                            }
+                        }
+
+                        if self.active_touches.len() >= 2 {
+                            let p0 = self.active_touches[0].1;
+                            let p1 = self.active_touches[1].1;
+                            let current_dist =
+                                ((p0.x - p1.x).powi(2) + (p0.y - p1.y).powi(2)).sqrt();
+                            if let Some(last_dist) = self.last_pinch_dist {
+                                let zoom_amount = (last_dist - current_dist) * 0.03;
+                                self.camera.zoom(zoom_amount as f32);
+                            }
+                            self.last_pinch_dist = Some(current_dist);
+                        }
+                    }
+                    TouchPhase::Ended | TouchPhase::Cancelled => {
+                        self.active_touches.retain(|(id, _)| *id != touch.id);
+                        if self.active_touches.len() < 2 {
+                            self.last_pinch_dist = None;
+                        }
+                    }
                 }
             }
             WindowEvent::Resized(physical_size) => {

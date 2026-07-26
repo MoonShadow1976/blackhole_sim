@@ -134,19 +134,56 @@ impl App {
         let mut body_vy = self.ui_body_vel_y;
         let mut body_vz = self.ui_body_vel_z;
 
-        egui::SidePanel::right("控制面板")
-            .min_width(300.0)
-            .resizable(true)
-            .show(&self.egui_ctx, |ui| {
-                egui::ScrollArea::vertical()
-                    .auto_shrink([false; 2])
-                    .show(ui, |ui| {
-                        ui.add_space(8.0);
+        let screen_width = self.egui_ctx.screen_rect().width();
+        let panel_min_width = if screen_width < 768.0 {
+            screen_width * 0.85
+        } else {
+            300.0
+        };
 
-                        // 标题 + 语言切换（右上角）
+        // 面板隐藏时，右上角显示悬浮切换按钮
+        if !self.ui_show_panel {
+            let btn_text = t!(self, "面板 ▶", "Panel ▶");
+            egui::Area::new(egui::Id::new("panel_toggle"))
+                .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-8.0, 8.0))
+                .order(egui::Order::Foreground)
+                .show(&self.egui_ctx, |ui| {
+                    let frame = egui::Frame::window(&self.egui_ctx.style());
+                    frame.show(ui, |ui| {
                         ui.horizontal(|ui| {
+                            if ui.button(btn_text).clicked() {
+                                self.ui_show_panel = true;
+                            }
+                        });
+                    });
+                });
+        }
+
+        if self.ui_show_panel {
+            egui::SidePanel::right("控制面板")
+                .min_width(panel_min_width)
+                .resizable(true)
+                .show(&self.egui_ctx, |ui| {
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false; 2])
+                        .show(ui, |ui| {
+                            ui.add_space(8.0);
+
+                            // 标题
                             ui.heading(t!(self, "🌌 黑洞模拟系统", "🌌 Black Hole Sim"));
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                            ui.label(
+                                egui::RichText::new(t!(
+                                    self,
+                                    "N体黑洞碰撞模拟",
+                                    "N-Body Black Hole Collision"
+                                ))
+                                .weak()
+                                .small(),
+                            );
+                            ui.add_space(6.0);
+
+                            // 语言切换 + 隐藏面板按钮
+                            ui.horizontal(|ui| {
                                 let mut lang = self.ui_lang;
                                 let zh_selected = matches!(lang, UiLang::Zh);
                                 let en_selected = matches!(lang, UiLang::En);
@@ -165,18 +202,18 @@ impl App {
                                     lang = UiLang::En;
                                 }
                                 self.ui_lang = lang;
-                            });
-                        });
 
-                        ui.label(
-                            egui::RichText::new(t!(
-                                self,
-                                "N体黑洞碰撞模拟",
-                                "N-Body Black Hole Collision"
-                            ))
-                            .weak()
-                            .small(),
-                        );
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    if ui
+                                        .button(t!(self, "◀ 隐藏", "◀ Hide"))
+                                        .on_hover_text(t!(self, "隐藏控制面板", "Hide control panel"))
+                                        .clicked()
+                                    {
+                                        self.ui_show_panel = false;
+                                    }
+                                });
+                            });
+
                         ui.add_space(8.0);
                         ui.separator();
 
@@ -469,6 +506,7 @@ impl App {
                         });
                     });
             });
+        }
 
         egui::TopBottomPanel::bottom("状态栏").show(&self.egui_ctx, |ui| {
             ui.horizontal(|ui| {
