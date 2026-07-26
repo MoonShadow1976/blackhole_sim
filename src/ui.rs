@@ -135,7 +135,7 @@ impl App {
         let mut body_vz = self.ui_body_vel_z;
 
         let screen_width = self.egui_ctx.screen_rect().width();
-        let panel_min_width = if screen_width < 768.0 {
+        let panel_width = if screen_width < 768.0 {
             screen_width * 0.8
         } else {
             260.0
@@ -161,8 +161,8 @@ impl App {
 
         if self.ui_show_panel {
             egui::SidePanel::right("控制面板")
-                .min_width(panel_min_width)
-                .default_width(panel_min_width + 60.0)
+                .default_width(panel_width)
+                .min_width(200.0)
                 .resizable(true)
                 .show(&self.egui_ctx, |ui| {
                     egui::ScrollArea::vertical()
