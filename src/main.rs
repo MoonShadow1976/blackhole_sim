@@ -626,7 +626,7 @@ impl ApplicationHandler<AppEvent> for App {
                     let Some(renderer) = self.renderer.as_mut() else {
                         return;
                     };
-                    let preview_black_hole = if self.ui_paused {
+                    let preview_black_hole = if self.ui_paused && self.ui_show_trails {
                         Some((
                             nalgebra::Vector3::new(
                                 self.ui_add_pos_x,
@@ -638,7 +638,7 @@ impl ApplicationHandler<AppEvent> for App {
                     } else {
                         None
                     };
-                    let preview_body = if self.ui_paused {
+                    let preview_body = if self.ui_paused && self.ui_show_trails {
                         Some((
                             [self.ui_body_pos_x, self.ui_body_pos_y, self.ui_body_pos_z],
                             self.ui_body_mass,
