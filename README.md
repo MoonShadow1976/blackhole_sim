@@ -6,7 +6,7 @@
 
 A real-time 3D black hole simulation with gravitational wave radiation, orbital inspiral, tidal disruption, and spacetime curvature visualization, written in Rust using WGPU.
 
-![Black Hole Simulation](interface.png)
+![Black Hole Simulation](static/interface.png)
 
 ## Features
 
@@ -328,7 +328,7 @@ cargo build --release --target wasm32-unknown-unknown --features web
 wasm-bindgen --out-dir dist --target web target/wasm32-unknown-unknown/release/blackhole_sim.wasm
 
 # Copy index.html
-cp index.html dist/
+cp static/index.html dist/
 
 # Serve locally (Wasm requires an HTTP server, cannot use file://)
 cd dist && python -m http.server 8080

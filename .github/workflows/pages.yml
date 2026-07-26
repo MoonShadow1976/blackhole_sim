@@ -42,7 +42,7 @@ jobs:
             target/wasm32-unknown-unknown/release/blackhole_sim.wasm
 
       - name: Copy index.html
-        run: cp index.html dist/
+        run: cp static/index.html dist/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

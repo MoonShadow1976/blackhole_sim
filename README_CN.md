@@ -5,7 +5,7 @@
 
 一个基于 Rust 和 WGPU 的实时 3D 黑洞模拟器，包含引力波辐射、轨道旋进、潮汐撕裂等物理现象的可视化。
 
-![黑洞模拟](interface.png)
+![黑洞模拟](static/interface.png)
 
 ## 功能特性
 
@@ -323,7 +323,7 @@ cargo build --release --target wasm32-unknown-unknown --features web
 wasm-bindgen --out-dir dist --target web target/wasm32-unknown-unknown/release/blackhole_sim.wasm
 
 # 复制 index.html
-cp index.html dist/
+cp static/index.html dist/
 
 # 本地启动 HTTP 服务器（Wasm 必须通过 HTTP 访问，不能用 file://）
 cd dist && python -m http.server 8080
