@@ -67,6 +67,13 @@ enum WasmAppEvent {
         egui_renderer: EguiRenderer,
     },
     ChineseFontLoaded(Vec<u8>),
+    TouchRotate {
+        dx: f32,
+        dy: f32,
+    },
+    TouchZoom {
+        delta: f32,
+    },
 }
 
 /// 应用状态
@@ -412,14 +419,15 @@ impl ApplicationHandler<AppEvent> for App {
                         if self.active_touches.len() == 2 {
                             let p0 = self.active_touches[0].1;
                             let p1 = self.active_touches[1].1;
-                            self.last_pinch_dist = Some(
-                                ((p0.x - p1.x).powi(2) + (p0.y - p1.y).powi(2)).sqrt(),
-                            );
+                            self.last_pinch_dist =
+                                Some(((p0.x - p1.x).powi(2) + (p0.y - p1.y).powi(2)).sqrt());
                         }
                     }
                     TouchPhase::Moved => {
-                        if let Some(entry) =
-                            self.active_touches.iter_mut().find(|(id, _)| *id == touch.id)
+                        if let Some(entry) = self
+                            .active_touches
+                            .iter_mut()
+                            .find(|(id, _)| *id == touch.id)
                         {
                             let old_pos = entry.1;
                             entry.1 = touch.location;
@@ -768,6 +776,14 @@ impl ApplicationHandler<AppEvent> for App {
             WasmAppEvent::ChineseFontLoaded(font_data) => {
                 setup_chinese_font_from_data(&self.egui_ctx, &font_data);
             }
+            WasmAppEvent::TouchRotate { dx, dy } => {
+                let sensitivity = 0.005;
+                self.camera.rotate_yaw(dx * sensitivity);
+                self.camera.rotate_pitch(dy * sensitivity);
+            }
+            WasmAppEvent::TouchZoom { delta } => {
+                self.camera.zoom(delta);
+            }
         }
     }
 }
@@ -787,6 +803,25 @@ fn main() {
 }
 
 #[cfg(target_family = "wasm")]
+static EVENT_PROXY: std::sync::OnceLock<EventLoopProxy<AppEvent>> = std::sync::OnceLock::new();
+
+#[cfg(target_family = "wasm")]
+#[wasm_bindgen]
+pub fn touch_rotate(dx: f32, dy: f32) {
+    if let Some(proxy) = EVENT_PROXY.get() {
+        let _ = proxy.send_event(WasmAppEvent::TouchRotate { dx, dy });
+    }
+}
+
+#[cfg(target_family = "wasm")]
+#[wasm_bindgen]
+pub fn touch_zoom(delta: f32) {
+    if let Some(proxy) = EVENT_PROXY.get() {
+        let _ = proxy.send_event(WasmAppEvent::TouchZoom { delta });
+    }
+}
+
+#[cfg(target_family = "wasm")]
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
     std::panic::set_hook(Box::new(|info| {
@@ -801,6 +836,9 @@ pub fn start() -> Result<(), JsValue> {
         .build()
         .expect("无法创建事件循环");
     let proxy = event_loop.create_proxy();
+
+    let _ = EVENT_PROXY.set(proxy.clone());
+
     let mut app = App::new(proxy);
 
     wasm_bindgen_futures::spawn_local(async move {

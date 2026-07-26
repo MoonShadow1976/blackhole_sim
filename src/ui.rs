@@ -5,6 +5,20 @@ use super::physics;
 use super::App;
 use super::UiLang;
 
+#[cfg(target_family = "wasm")]
+fn set_panel_visible(visible: bool) {
+    if let Some(window) = web_sys::window() {
+        let js_val = js_sys::Reflect::get(&window, &"__setPanelVisible".into())
+            .unwrap_or_else(|_| wasm_bindgen::JsValue::UNDEFINED);
+        if let Some(func) = js_val.dyn_ref::<js_sys::Function>() {
+            let _ = func.call1(&window, &wasm_bindgen::JsValue::from_bool(visible));
+        }
+    }
+}
+
+#[cfg(target_family = "wasm")]
+use wasm_bindgen::JsCast;
+
 macro_rules! t {
     ($self:ident, $zh:expr, $en:expr) => {
         match $self.ui_lang {
@@ -153,6 +167,8 @@ impl App {
                         ui.horizontal(|ui| {
                             if ui.button(btn_text).clicked() {
                                 self.ui_show_panel = true;
+                                #[cfg(target_family = "wasm")]
+                                set_panel_visible(true);
                             }
                         });
                     });
@@ -173,328 +189,362 @@ impl App {
                             // 标题 + 右上角按钮（语言切换 + 隐藏面板）
                             ui.horizontal(|ui| {
                                 ui.heading(t!(self, "🌌 黑洞模拟", "🌌 BH Sim"));
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-                                    if ui
-                                        .small_button(t!(self, "◀", "◀"))
-                                        .on_hover_text(t!(self, "隐藏面板", "Hide panel"))
-                                        .clicked()
-                                    {
-                                        self.ui_show_panel = false;
-                                    }
-                                    ui.add_space(4.0);
-                                    let mut lang = self.ui_lang;
-                                    let zh_selected = matches!(lang, UiLang::Zh);
-                                    let en_selected = matches!(lang, UiLang::En);
-                                    if ui
-                                        .selectable_label(zh_selected, t!(self, "中", "Zh"))
-                                        .on_hover_text(t!(self, "切换到中文", "Switch to Chinese"))
-                                        .clicked()
-                                    {
-                                        lang = UiLang::Zh;
-                                    }
-                                    if ui
-                                        .selectable_label(en_selected, t!(self, "EN", "EN"))
-                                        .on_hover_text(t!(self, "切换到英文", "Switch to English"))
-                                        .clicked()
-                                    {
-                                        lang = UiLang::En;
-                                    }
-                                    self.ui_lang = lang;
-                                });
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::TOP),
+                                    |ui| {
+                                        if ui
+                                            .small_button(t!(self, "◀", "◀"))
+                                            .on_hover_text(t!(self, "隐藏面板", "Hide panel"))
+                                            .clicked()
+                                        {
+                                            self.ui_show_panel = false;
+                                            #[cfg(target_family = "wasm")]
+                                            set_panel_visible(false);
+                                        }
+                                        ui.add_space(4.0);
+                                        let mut lang = self.ui_lang;
+                                        let zh_selected = matches!(lang, UiLang::Zh);
+                                        let en_selected = matches!(lang, UiLang::En);
+                                        if ui
+                                            .selectable_label(zh_selected, t!(self, "中", "Zh"))
+                                            .on_hover_text(t!(
+                                                self,
+                                                "切换到中文",
+                                                "Switch to Chinese"
+                                            ))
+                                            .clicked()
+                                        {
+                                            lang = UiLang::Zh;
+                                        }
+                                        if ui
+                                            .selectable_label(en_selected, t!(self, "EN", "EN"))
+                                            .on_hover_text(t!(
+                                                self,
+                                                "切换到英文",
+                                                "Switch to English"
+                                            ))
+                                            .clicked()
+                                        {
+                                            lang = UiLang::En;
+                                        }
+                                        self.ui_lang = lang;
+                                    },
+                                );
                             });
 
-                        ui.add_space(8.0);
-                        ui.separator();
-
-                        ui.add_space(4.0);
-                        ui.label(
-                            egui::RichText::new(t!(self, "━━━ 状态信息 ━━━", "━━━ Status ━━━"))
-                                .strong()
-                                .color(egui::Color32::from_rgb(120, 180, 255)),
-                        );
-
-                        ui.horizontal(|ui| {
-                            ui.label(t!(self, "状态:", "Status:"));
-                            ui.colored_label(egui::Color32::from_rgb(100, 255, 120), &phase);
-                        });
-                        ui.label(format!(
-                            "{} {:.2} {}",
-                            t!(self, "模拟时间:", "Sim Time:"),
-                            time,
-                            t!(self, "s", "s")
-                        ));
-                        ui.label(format!(
-                            "{} {}",
-                            t!(self, "黑洞数量:", "Black Holes:"),
-                            bh_count
-                        ));
-                        ui.label(format!(
-                            "{} {}",
-                            t!(self, "天体数量:", "Bodies:"),
-                            self.sim.bodies.len()
-                        ));
-                        ui.label(format!(
-                            "{} {}",
-                            t!(self, "碎片粒子:", "Debris:"),
-                            self.sim.debris.len()
-                        ));
-                        if bh_count >= 2 {
-                            ui.label(t!(
-                                self,
-                                "引力波: 连续波模型（双黑洞）",
-                                "Grav. Waves: Continuous (BBH)"
-                            ));
-                        }
-
-                        // 列出所有黑洞
-                        if bh_count > 0 {
-                            ui.add_space(4.0);
-                            ui.label(
-                                egui::RichText::new(t!(
-                                    self,
-                                    "── 黑洞列表 ──",
-                                    "── Black Holes ──"
-                                ))
-                                .size(12.0)
-                                .weak(),
-                            );
-                            for (i, bh) in self.sim.black_holes.iter().enumerate() {
-                                ui.label(format!(
-                                    "  {}: M={:.2}  pos=({:.1},{:.1},{:.1})",
-                                    i + 1,
-                                    bh.mass,
-                                    bh.pos.x,
-                                    bh.pos.y,
-                                    bh.pos.z
-                                ));
-                            }
-                        }
-
-                        ui.add_space(4.0);
-                        ui.separator();
-
-                        ui.add_space(4.0);
-                        ui.label(
-                            egui::RichText::new(t!(self, "━━━ 模拟控制 ━━━", "━━━ Controls ━━━"))
-                                .strong()
-                                .color(egui::Color32::from_rgb(120, 180, 255)),
-                        );
-
-                        ui.horizontal(|ui| {
-                            if ui
-                                .button(if paused {
-                                    t!(self, "▶  继续", "▶  Resume")
-                                } else {
-                                    t!(self, "⏸ 暂停", "⏸ Pause")
-                                })
-                                .clicked()
-                            {
-                                paused = !paused;
-                            }
-                            if ui.button(t!(self, "🔄 重置", "🔄 Reset")).clicked() {
-                                reset = true;
-                            }
-                        });
-
-                        ui.add_space(4.0);
-                        ui.horizontal(|ui| {
-                            ui.checkbox(&mut show_background, t!(self, "背景", "Background"));
-                            ui.checkbox(&mut show_bodies, t!(self, "天体", "Bodies"));
-                        });
-                        ui.horizontal(|ui| {
-                            ui.checkbox(&mut show_waves, t!(self, "引力波", "Grav. Waves"));
-                            ui.checkbox(&mut show_trails, t!(self, "轨迹预测", "Trajectory"));
-                        });
-
-                        if show_waves {
-                            ui.add_space(4.0);
+                            ui.add_space(8.0);
                             ui.separator();
+
+                            ui.add_space(4.0);
                             ui.label(
-                                egui::RichText::new(t!(self, "网格配置", "Grid Settings"))
+                                egui::RichText::new(t!(self, "━━━ 状态信息 ━━━", "━━━ Status ━━━"))
                                     .strong()
                                     .color(egui::Color32::from_rgb(120, 180, 255)),
                             );
 
-                            let mut grid_size_i = self.sim.grid_size as i32;
-                            ui.add(
-                                egui::Slider::new(&mut grid_size_i, 6..=50)
-                                    .text(t!(self, "格点数量", "Grid Size"))
-                                    .step_by(1.0),
-                            );
-
-                            let mut grid_spacing_f = self.sim.grid_spacing;
-                            ui.add(
-                                egui::Slider::new(&mut grid_spacing_f, 2.0..=30.0)
-                                    .text(t!(self, "格点间距", "Grid Spacing"))
-                                    .step_by(0.5),
-                            );
-
-                            ui.checkbox(&mut three_planes, t!(self, "仅三正交面", "3 Planes Only"));
-
-                            self.sim
-                                .set_grid_params(grid_size_i as usize, grid_spacing_f);
-                        }
-
-                        ui.add_space(4.0);
-
-                        ui.add(
-                            egui::Slider::new(&mut sim_speed, 0.1..=50.0)
-                                .text(t!(self, "模拟速度", "Sim Speed"))
-                                .step_by(0.05),
-                        );
-
-                        ui.add_space(4.0);
-                        ui.separator();
-
-                        ui.add_space(4.0);
-                        ui.label(
-                            egui::RichText::new(t!(
-                                self,
-                                "━━━ 添加黑洞 ━━━",
-                                "━━━ Add Black Hole ━━━"
-                            ))
-                            .strong()
-                            .color(egui::Color32::from_rgb(255, 180, 100)),
-                        );
-
-                        ui.add(
-                            egui::Slider::new(&mut add_mass, 0.1..=10.0)
-                                .text(t!(self, "质量", "Mass"))
-                                .step_by(0.1),
-                        );
-
-                        ui.label(t!(self, "位置:", "Position:"));
-                        ui.horizontal(|ui| {
-                            ui.add(egui::DragValue::new(&mut add_px).speed(0.2).prefix("x: "));
-                            ui.add(egui::DragValue::new(&mut add_py).speed(0.2).prefix("y: "));
-                            ui.add(egui::DragValue::new(&mut add_pz).speed(0.2).prefix("z: "));
-                        });
-
-                        ui.label(t!(self, "速度:", "Velocity:"));
-                        ui.horizontal(|ui| {
-                            ui.add(egui::DragValue::new(&mut add_vx).speed(0.05).prefix("vx: "));
-                            ui.add(egui::DragValue::new(&mut add_vy).speed(0.05).prefix("vy: "));
-                            ui.add(egui::DragValue::new(&mut add_vz).speed(0.05).prefix("vz: "));
-                        });
-
-                        ui.add_space(6.0);
-                        if ui
-                            .button(
-                                egui::RichText::new(t!(
+                            ui.horizontal(|ui| {
+                                ui.label(t!(self, "状态:", "Status:"));
+                                ui.colored_label(egui::Color32::from_rgb(100, 255, 120), &phase);
+                            });
+                            ui.label(format!(
+                                "{} {:.2} {}",
+                                t!(self, "模拟时间:", "Sim Time:"),
+                                time,
+                                t!(self, "s", "s")
+                            ));
+                            ui.label(format!(
+                                "{} {}",
+                                t!(self, "黑洞数量:", "Black Holes:"),
+                                bh_count
+                            ));
+                            ui.label(format!(
+                                "{} {}",
+                                t!(self, "天体数量:", "Bodies:"),
+                                self.sim.bodies.len()
+                            ));
+                            ui.label(format!(
+                                "{} {}",
+                                t!(self, "碎片粒子:", "Debris:"),
+                                self.sim.debris.len()
+                            ));
+                            if bh_count >= 2 {
+                                ui.label(t!(
                                     self,
-                                    "➕ 添加黑洞 (暂停)",
-                                    "➕ Add Black Hole (Paused)"
-                                ))
-                                .size(14.0)
-                                .strong(),
-                            )
-                            .clicked()
-                            && self.sim.black_hole_count() < 8
-                        {
-                            add_bh = true;
-                        }
-                        if self.sim.black_hole_count() >= 8 {
+                                    "引力波: 连续波模型（双黑洞）",
+                                    "Grav. Waves: Continuous (BBH)"
+                                ));
+                            }
+
+                            // 列出所有黑洞
+                            if bh_count > 0 {
+                                ui.add_space(4.0);
+                                ui.label(
+                                    egui::RichText::new(t!(
+                                        self,
+                                        "── 黑洞列表 ──",
+                                        "── Black Holes ──"
+                                    ))
+                                    .size(12.0)
+                                    .weak(),
+                                );
+                                for (i, bh) in self.sim.black_holes.iter().enumerate() {
+                                    ui.label(format!(
+                                        "  {}: M={:.2}  pos=({:.1},{:.1},{:.1})",
+                                        i + 1,
+                                        bh.mass,
+                                        bh.pos.x,
+                                        bh.pos.y,
+                                        bh.pos.z
+                                    ));
+                                }
+                            }
+
+                            ui.add_space(4.0);
+                            ui.separator();
+
+                            ui.add_space(4.0);
                             ui.label(
                                 egui::RichText::new(t!(
                                     self,
-                                    "已达最大黑洞数 (8)",
-                                    "Max black holes (8)"
+                                    "━━━ 模拟控制 ━━━",
+                                    "━━━ Controls ━━━"
                                 ))
-                                .color(egui::Color32::RED)
-                                .small(),
-                            );
-                        }
-
-                        ui.add_space(4.0);
-                        ui.separator();
-
-                        ui.add_space(4.0);
-                        ui.label(
-                            egui::RichText::new(t!(self, "━━━ 添加天体 ━━━", "━━━ Add Body ━━━"))
-                                .strong()
-                                .color(egui::Color32::from_rgb(100, 255, 180)),
-                        );
-                        ui.label(
-                            egui::RichText::new(t!(
-                                self,
-                                "天体被洛希极限撕裂后形成吸积盘",
-                                "Tidal disruption forms accretion disk"
-                            ))
-                            .weak()
-                            .small(),
-                        );
-
-                        ui.add(
-                            egui::Slider::new(&mut body_mass, 0.05..=5.0)
-                                .text(t!(self, "质量", "Mass"))
-                                .step_by(0.05),
-                        );
-
-                        ui.label(t!(self, "位置:", "Position:"));
-                        ui.horizontal(|ui| {
-                            ui.add(egui::DragValue::new(&mut body_px).speed(0.2).prefix("x: "));
-                            ui.add(egui::DragValue::new(&mut body_py).speed(0.2).prefix("y: "));
-                            ui.add(egui::DragValue::new(&mut body_pz).speed(0.2).prefix("z: "));
-                        });
-
-                        ui.label(t!(self, "速度:", "Velocity:"));
-                        ui.horizontal(|ui| {
-                            ui.add(
-                                egui::DragValue::new(&mut body_vx)
-                                    .speed(0.05)
-                                    .prefix("vx: "),
-                            );
-                            ui.add(
-                                egui::DragValue::new(&mut body_vy)
-                                    .speed(0.05)
-                                    .prefix("vy: "),
-                            );
-                            ui.add(
-                                egui::DragValue::new(&mut body_vz)
-                                    .speed(0.05)
-                                    .prefix("vz: "),
-                            );
-                        });
-
-                        ui.add_space(6.0);
-                        if ui
-                            .button(
-                                egui::RichText::new(t!(
-                                    self,
-                                    "➕ 添加天体 (暂停)",
-                                    "➕ Add Body (Paused)"
-                                ))
-                                .size(14.0)
-                                .strong(),
-                            )
-                            .clicked()
-                        {
-                            add_body = true;
-                        }
-
-                        ui.add_space(4.0);
-                        ui.separator();
-
-                        ui.add_space(4.0);
-                        ui.label(
-                            egui::RichText::new(t!(self, "━━━ 操作说明 ━━━", "━━━ Controls ━━━"))
                                 .strong()
                                 .color(egui::Color32::from_rgb(120, 180, 255)),
-                        );
-                        ui.horizontal(|ui| {
-                            ui.label(t!(self, "左键: 旋转", "LMB: Rotate"));
-                            ui.label(t!(self, "滚轮: 缩放", "Wheel: Zoom"));
+                            );
+
+                            ui.horizontal(|ui| {
+                                if ui
+                                    .button(if paused {
+                                        t!(self, "▶  继续", "▶  Resume")
+                                    } else {
+                                        t!(self, "⏸ 暂停", "⏸ Pause")
+                                    })
+                                    .clicked()
+                                {
+                                    paused = !paused;
+                                }
+                                if ui.button(t!(self, "🔄 重置", "🔄 Reset")).clicked() {
+                                    reset = true;
+                                }
+                            });
+
+                            ui.add_space(4.0);
+                            ui.horizontal(|ui| {
+                                ui.checkbox(&mut show_background, t!(self, "背景", "Background"));
+                                ui.checkbox(&mut show_bodies, t!(self, "天体", "Bodies"));
+                            });
+                            ui.horizontal(|ui| {
+                                ui.checkbox(&mut show_waves, t!(self, "引力波", "Grav. Waves"));
+                                ui.checkbox(&mut show_trails, t!(self, "轨迹预测", "Trajectory"));
+                            });
+
+                            if show_waves {
+                                ui.add_space(4.0);
+                                ui.separator();
+                                ui.label(
+                                    egui::RichText::new(t!(self, "网格配置", "Grid Settings"))
+                                        .strong()
+                                        .color(egui::Color32::from_rgb(120, 180, 255)),
+                                );
+
+                                let mut grid_size_i = self.sim.grid_size as i32;
+                                ui.add(
+                                    egui::Slider::new(&mut grid_size_i, 6..=50)
+                                        .text(t!(self, "格点数量", "Grid Size"))
+                                        .step_by(1.0),
+                                );
+
+                                let mut grid_spacing_f = self.sim.grid_spacing;
+                                ui.add(
+                                    egui::Slider::new(&mut grid_spacing_f, 2.0..=30.0)
+                                        .text(t!(self, "格点间距", "Grid Spacing"))
+                                        .step_by(0.5),
+                                );
+
+                                ui.checkbox(
+                                    &mut three_planes,
+                                    t!(self, "仅三正交面", "3 Planes Only"),
+                                );
+
+                                self.sim
+                                    .set_grid_params(grid_size_i as usize, grid_spacing_f);
+                            }
+
+                            ui.add_space(4.0);
+
+                            ui.add(
+                                egui::Slider::new(&mut sim_speed, 0.1..=50.0)
+                                    .text(t!(self, "模拟速度", "Sim Speed"))
+                                    .step_by(0.05),
+                            );
+
+                            ui.add_space(4.0);
+                            ui.separator();
+
+                            ui.add_space(4.0);
+                            ui.label(
+                                egui::RichText::new(t!(
+                                    self,
+                                    "━━━ 添加黑洞 ━━━",
+                                    "━━━ Add Black Hole ━━━"
+                                ))
+                                .strong()
+                                .color(egui::Color32::from_rgb(255, 180, 100)),
+                            );
+
+                            ui.add(
+                                egui::Slider::new(&mut add_mass, 0.1..=10.0)
+                                    .text(t!(self, "质量", "Mass"))
+                                    .step_by(0.1),
+                            );
+
+                            ui.label(t!(self, "位置:", "Position:"));
+                            ui.horizontal(|ui| {
+                                ui.add(egui::DragValue::new(&mut add_px).speed(0.2).prefix("x: "));
+                                ui.add(egui::DragValue::new(&mut add_py).speed(0.2).prefix("y: "));
+                                ui.add(egui::DragValue::new(&mut add_pz).speed(0.2).prefix("z: "));
+                            });
+
+                            ui.label(t!(self, "速度:", "Velocity:"));
+                            ui.horizontal(|ui| {
+                                ui.add(
+                                    egui::DragValue::new(&mut add_vx).speed(0.05).prefix("vx: "),
+                                );
+                                ui.add(
+                                    egui::DragValue::new(&mut add_vy).speed(0.05).prefix("vy: "),
+                                );
+                                ui.add(
+                                    egui::DragValue::new(&mut add_vz).speed(0.05).prefix("vz: "),
+                                );
+                            });
+
+                            ui.add_space(6.0);
+                            if ui
+                                .button(
+                                    egui::RichText::new(t!(
+                                        self,
+                                        "➕ 添加黑洞 (暂停)",
+                                        "➕ Add Black Hole (Paused)"
+                                    ))
+                                    .size(14.0)
+                                    .strong(),
+                                )
+                                .clicked()
+                                && self.sim.black_hole_count() < 8
+                            {
+                                add_bh = true;
+                            }
+                            if self.sim.black_hole_count() >= 8 {
+                                ui.label(
+                                    egui::RichText::new(t!(
+                                        self,
+                                        "已达最大黑洞数 (8)",
+                                        "Max black holes (8)"
+                                    ))
+                                    .color(egui::Color32::RED)
+                                    .small(),
+                                );
+                            }
+
+                            ui.add_space(4.0);
+                            ui.separator();
+
+                            ui.add_space(4.0);
+                            ui.label(
+                                egui::RichText::new(t!(
+                                    self,
+                                    "━━━ 添加天体 ━━━",
+                                    "━━━ Add Body ━━━"
+                                ))
+                                .strong()
+                                .color(egui::Color32::from_rgb(100, 255, 180)),
+                            );
+                            ui.label(
+                                egui::RichText::new(t!(
+                                    self,
+                                    "天体被洛希极限撕裂后形成吸积盘",
+                                    "Tidal disruption forms accretion disk"
+                                ))
+                                .weak()
+                                .small(),
+                            );
+
+                            ui.add(
+                                egui::Slider::new(&mut body_mass, 0.05..=5.0)
+                                    .text(t!(self, "质量", "Mass"))
+                                    .step_by(0.05),
+                            );
+
+                            ui.label(t!(self, "位置:", "Position:"));
+                            ui.horizontal(|ui| {
+                                ui.add(egui::DragValue::new(&mut body_px).speed(0.2).prefix("x: "));
+                                ui.add(egui::DragValue::new(&mut body_py).speed(0.2).prefix("y: "));
+                                ui.add(egui::DragValue::new(&mut body_pz).speed(0.2).prefix("z: "));
+                            });
+
+                            ui.label(t!(self, "速度:", "Velocity:"));
+                            ui.horizontal(|ui| {
+                                ui.add(
+                                    egui::DragValue::new(&mut body_vx)
+                                        .speed(0.05)
+                                        .prefix("vx: "),
+                                );
+                                ui.add(
+                                    egui::DragValue::new(&mut body_vy)
+                                        .speed(0.05)
+                                        .prefix("vy: "),
+                                );
+                                ui.add(
+                                    egui::DragValue::new(&mut body_vz)
+                                        .speed(0.05)
+                                        .prefix("vz: "),
+                                );
+                            });
+
+                            ui.add_space(6.0);
+                            if ui
+                                .button(
+                                    egui::RichText::new(t!(
+                                        self,
+                                        "➕ 添加天体 (暂停)",
+                                        "➕ Add Body (Paused)"
+                                    ))
+                                    .size(14.0)
+                                    .strong(),
+                                )
+                                .clicked()
+                            {
+                                add_body = true;
+                            }
+
+                            ui.add_space(4.0);
+                            ui.separator();
+
+                            ui.add_space(4.0);
+                            ui.label(
+                                egui::RichText::new(t!(
+                                    self,
+                                    "━━━ 操作说明 ━━━",
+                                    "━━━ Controls ━━━"
+                                ))
+                                .strong()
+                                .color(egui::Color32::from_rgb(120, 180, 255)),
+                            );
+                            ui.horizontal(|ui| {
+                                ui.label(t!(self, "左键: 旋转", "LMB: Rotate"));
+                                ui.label(t!(self, "滚轮: 缩放", "Wheel: Zoom"));
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label(t!(self, "WASD: 平移", "WASD: Pan"));
+                                ui.label(t!(self, "QE: 上下", "QE: Up/Down"));
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label(t!(self, "方向键: 旋转", "Arrows: Rotate"));
+                                ui.label(t!(self, "SPACE: 暂停", "SPACE: Pause"));
+                            });
                         });
-                        ui.horizontal(|ui| {
-                            ui.label(t!(self, "WASD: 平移", "WASD: Pan"));
-                            ui.label(t!(self, "QE: 上下", "QE: Up/Down"));
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label(t!(self, "方向键: 旋转", "Arrows: Rotate"));
-                            ui.label(t!(self, "SPACE: 暂停", "SPACE: Pause"));
-                        });
-                    });
-            });
+                });
         }
 
         egui::TopBottomPanel::bottom("状态栏").show(&self.egui_ctx, |ui| {

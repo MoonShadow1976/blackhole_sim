@@ -96,11 +96,125 @@
         })();
     </script>
     <script type="module">
-        import init from './blackhole_sim.js';
+        import init, { touch_rotate, touch_zoom } from './blackhole_sim.js';
+
+        let panelVisible = true;
+        let panelWidth = 260;
+
+        function updatePanelWidth() {
+            const screenWidth = window.innerWidth;
+            if (screenWidth < 768) {
+                panelWidth = screenWidth * 0.8;
+            } else {
+                panelWidth = 260;
+            }
+        }
+        updatePanelWidth();
+        window.addEventListener('resize', updatePanelWidth);
+
+        function isInUiArea(clientX, clientY) {
+            const screenWidth = window.innerWidth;
+            const screenHeight = window.innerHeight;
+            if (panelVisible && clientX >= screenWidth - panelWidth) {
+                return true;
+            }
+            if (clientY < 100 && clientX < 100) {
+                return true;
+            }
+            if (!panelVisible && clientY < 50 && clientX > screenWidth - 120) {
+                return true;
+            }
+            if (clientY > screenHeight - 40) {
+                return true;
+            }
+            return false;
+        }
+
+        window.__setPanelVisible = function(visible) {
+            panelVisible = visible;
+        };
+
         async function run() {
             try {
                 await init();
                 document.getElementById('loading').style.display = 'none';
+
+                const canvas = document.querySelector('canvas');
+                if (!canvas) return;
+
+                let activePointers = new Map();
+                let lastPinchDist = null;
+                let cameraGestureActive = false;
+
+                function onPointerDown(e) {
+                    if (e.pointerType !== 'touch') return;
+                    if (e.target !== canvas) return;
+                    if (isInUiArea(e.clientX, e.clientY)) return;
+
+                    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                    cameraGestureActive = true;
+
+                    if (activePointers.size === 2) {
+                        const pts = Array.from(activePointers.values());
+                        lastPinchDist = Math.sqrt((pts[0].x - pts[1].x) ** 2 + (pts[0].y - pts[1].y) ** 2);
+                    }
+
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                }
+
+                function onPointerMove(e) {
+                    if (e.pointerType !== 'touch') return;
+                    if (!activePointers.has(e.pointerId)) return;
+
+                    const entry = activePointers.get(e.pointerId);
+                    const oldX = entry.x;
+                    const oldY = entry.y;
+                    entry.x = e.clientX;
+                    entry.y = e.clientY;
+
+                    if (activePointers.size === 1) {
+                        const dx = e.clientX - oldX;
+                        const dy = e.clientY - oldY;
+                        touch_rotate(dx, dy);
+                    } else if (activePointers.size >= 2) {
+                        const pts = Array.from(activePointers.values());
+                        const currentDist = Math.sqrt((pts[0].x - pts[1].x) ** 2 + (pts[0].y - pts[1].y) ** 2);
+                        if (lastPinchDist !== null) {
+                            const zoomAmount = (lastPinchDist - currentDist) * 0.03;
+                            touch_zoom(zoomAmount);
+                        }
+                        lastPinchDist = currentDist;
+                    }
+
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                }
+
+                function onPointerEnd(e) {
+                    if (e.pointerType !== 'touch') return;
+                    if (!activePointers.has(e.pointerId)) return;
+
+                    activePointers.delete(e.pointerId);
+                    if (activePointers.size < 2) {
+                        lastPinchDist = null;
+                    }
+                    if (activePointers.size === 0) {
+                        cameraGestureActive = false;
+                    }
+
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                }
+
+                document.addEventListener('pointerdown', onPointerDown, { passive: false, capture: true });
+                document.addEventListener('pointermove', onPointerMove, { passive: false, capture: true });
+                document.addEventListener('pointerup', onPointerEnd, { passive: false, capture: true });
+                document.addEventListener('pointercancel', onPointerEnd, { passive: false, capture: true });
+                document.addEventListener('pointerleave', onPointerEnd, { passive: false, capture: true });
             } catch (e) {
                 if (e.message && e.message.includes('Using exceptions for control flow')) {
                     document.getElementById('loading').style.display = 'none';
