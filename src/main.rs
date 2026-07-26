@@ -725,7 +725,13 @@ fn main() {
 #[cfg(target_family = "wasm")]
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
-    console_error_panic_hook::set_once();
+    std::panic::set_hook(Box::new(|info| {
+        let msg = info.to_string();
+        if msg.contains("Using exceptions for control flow") {
+            return;
+        }
+        web_sys::console::error_1(&format!("Panic: {}", msg).into());
+    }));
 
     let event_loop = EventLoop::<AppEvent>::with_user_event()
         .build()

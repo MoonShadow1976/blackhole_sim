@@ -57,20 +57,39 @@
     <script>
         (function() {
             const origError = console.error;
+            const origWarn = console.warn;
             const ctrlFlowMsg = 'Using exceptions for control flow';
+            function isCtrlFlow(args) {
+                for (let i = 0; i < args.length; i++) {
+                    const a = args[i];
+                    if (typeof a === 'string' && a.includes(ctrlFlowMsg)) return true;
+                    if (a instanceof Error && a.message && a.message.includes(ctrlFlowMsg)) return true;
+                }
+                return false;
+            }
             console.error = function(...args) {
-                if (args.length > 0 && typeof args[0] === 'string' && args[0].includes(ctrlFlowMsg)) {
-                    return;
-                }
-                if (args.length > 0 && args[0] instanceof Error && args[0].message.includes(ctrlFlowMsg)) {
-                    return;
-                }
+                if (isCtrlFlow(args)) return;
                 origError.apply(console, args);
+            };
+            console.warn = function(...args) {
+                if (isCtrlFlow(args)) return;
+                origWarn.apply(console, args);
             };
             window.addEventListener('error', function(e) {
                 if (e.message && e.message.includes(ctrlFlowMsg)) {
                     e.preventDefault();
+                    e.stopPropagation();
                     return false;
+                }
+            }, true);
+            window.addEventListener('unhandledrejection', function(e) {
+                if (e.reason) {
+                    const msg = typeof e.reason === 'string' ? e.reason : (e.reason.message || '');
+                    if (msg.includes(ctrlFlowMsg)) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    }
                 }
             });
         })();
