@@ -162,6 +162,7 @@ impl App {
         if self.ui_show_panel {
             egui::SidePanel::right("控制面板")
                 .min_width(panel_min_width)
+                .default_width(panel_min_width + 60.0)
                 .resizable(true)
                 .show(&self.egui_ctx, |ui| {
                     egui::ScrollArea::vertical()
