@@ -320,8 +320,7 @@ cargo install wasm-bindgen-cli
 cargo build --release --target wasm32-unknown-unknown --features web
 
 # 生成 JS 绑定到 dist/ 目录
-wasm-bindgen --out-dir dist --target web \
-    target/wasm32-unknown-unknown/release/blackhole_sim.wasm
+wasm-bindgen --out-dir dist --target web target/wasm32-unknown-unknown/release/blackhole_sim.wasm
 
 # 复制 index.html
 cp index.html dist/
