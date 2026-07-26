@@ -239,14 +239,17 @@ impl ApplicationHandler<AppEvent> for App {
             style.set_property("display", "block").unwrap();
             style.set_property("width", "100vw").unwrap();
             style.set_property("height", "100vh").unwrap();
-            web_sys::window()
-                .unwrap()
-                .document()
-                .unwrap()
-                .body()
-                .unwrap()
-                .append_child(&canvas)
-                .unwrap();
+            style.set_property("position", "fixed").unwrap();
+            style.set_property("top", "0").unwrap();
+            style.set_property("left", "0").unwrap();
+            style.set_property("margin", "0").unwrap();
+            style.set_property("padding", "0").unwrap();
+            let document = web_sys::window().unwrap().document().unwrap();
+            if let Some(container) = document.get_element_by_id("canvas-container") {
+                container.append_child(&canvas).unwrap();
+            } else {
+                document.body().unwrap().append_child(&canvas).unwrap();
+            }
         }
 
         let window: &'static Window = Box::leak(Box::new(window));
