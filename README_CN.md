@@ -132,7 +132,7 @@ $$
 \delta_{\text{tidal}} = \kappa_2 \frac{M'}{M} \left(\frac{M}{D}\right)^2 P_2(\cos\theta)
 $$
 
-其中 $P_2(\cos\theta) = \frac{1}{2}(3\cos^2\theta - 1)$ 为二阶勒让德多项式，$\theta$ 为光线方向与伴星方向夹角。
+其中 $P_2(\cos\theta) = \frac{1}{2}(3\cos^2\theta - 1)$ 为二阶勒让德多项式， $\theta$ 为光线方向与伴星方向夹角。
 
 **标定常数**： $\kappa_1 = 2$,  $\kappa_2 = 5$（弱场近似， $D \gtrsim 10M$ 时误差 < 几个百分点）。
 
