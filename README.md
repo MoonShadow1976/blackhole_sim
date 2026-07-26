@@ -302,6 +302,8 @@ src/
 
 ## Build and Run
 
+### Desktop
+
 ```bash
 # Build with optimizations
 cargo build --release
@@ -309,6 +311,32 @@ cargo build --release
 # Run
 cargo run --release
 ```
+
+### Web (WebAssembly)
+
+```bash
+# Install wasm32 target
+rustup target add wasm32-unknown-unknown
+
+# Install wasm-bindgen-cli
+cargo install wasm-bindgen-cli
+
+# Build wasm release
+cargo build --release --target wasm32-unknown-unknown --features web
+
+# Generate JS bindings into dist/
+wasm-bindgen --out-dir dist --target web \
+    target/wasm32-unknown-unknown/release/blackhole_sim.wasm
+
+# Copy index.html
+cp index.html dist/
+
+# Serve locally (Wasm requires an HTTP server, cannot use file://)
+cd dist && python -m http.server 8080
+# Open http://localhost:8080/
+```
+
+The web build uses the WebGL2 backend via `wgpu` for broad browser compatibility.
 
 ## Controls
 

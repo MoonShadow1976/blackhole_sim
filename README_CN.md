@@ -297,6 +297,8 @@ src/
 
 ## 构建和运行
 
+### 桌面版
+
 ```bash
 # 优化构建
 cargo build --release
@@ -304,6 +306,32 @@ cargo build --release
 # 运行
 cargo run --release
 ```
+
+### Web 版 (WebAssembly)
+
+```bash
+# 安装 wasm32 编译目标
+rustup target add wasm32-unknown-unknown
+
+# 安装 wasm-bindgen-cli
+cargo install wasm-bindgen-cli
+
+# 构建 wasm release
+cargo build --release --target wasm32-unknown-unknown --features web
+
+# 生成 JS 绑定到 dist/ 目录
+wasm-bindgen --out-dir dist --target web \
+    target/wasm32-unknown-unknown/release/blackhole_sim.wasm
+
+# 复制 index.html
+cp index.html dist/
+
+# 本地启动 HTTP 服务器（Wasm 必须通过 HTTP 访问，不能用 file://）
+cd dist && python -m http.server 8080
+# 打开 http://localhost:8080/
+```
+
+Web 版通过 `wgpu` 使用 WebGL2 后端，保证浏览器兼容性。
 
 ## 控制
 
