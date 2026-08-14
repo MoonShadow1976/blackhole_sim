@@ -127,7 +127,8 @@ struct App {
     pub(crate) active_touches: Vec<(u64, PhysicalPosition<f64>)>,
     pub(crate) last_pinch_dist: Option<f64>,
     pub(crate) window: Option<&'static Window>,
-    /// WASM 端事件代理（桌面端为 None）
+    /// WASM 端事件代理（桌面端为 None，字段仅 wasm 端读取）
+    #[cfg_attr(not(target_family = "wasm"), allow(dead_code))]
     pub(crate) event_proxy: Option<EventLoopProxy<AppEvent>>,
     // UI 显示状态
     pub(crate) ui_show_background: bool,
@@ -279,6 +280,82 @@ impl App {
         instances.truncate(4000);
         instances
     }
+
+    /// 渲染 egui 覆盖层：结束 egui 帧、绘制到主视图并提交队列
+    fn render_egui_overlay(
+        &mut self,
+        window: &'static Window,
+        output: wgpu::SurfaceTexture,
+        view: wgpu::TextureView,
+    ) {
+        if let (Some(egui_renderer), Some(renderer_ref)) =
+            (self.egui_renderer.as_mut(), self.renderer.as_ref())
+        {
+            let screen_descriptor = egui_wgpu::ScreenDescriptor {
+                size_in_pixels: [renderer_ref.config.width, renderer_ref.config.height],
+                pixels_per_point: window.scale_factor() as f32,
+            };
+
+            // end_pass 在此处调用（与 begin_pass 配对）
+            let full_output = self.egui_ctx.end_pass();
+            let paint_jobs = self
+                .egui_ctx
+                .tessellate(full_output.shapes, screen_descriptor.pixels_per_point);
+
+            let mut encoder = renderer_ref.device.create_command_encoder(
+                &wgpu::CommandEncoderDescriptor {
+                    label: Some("egui 命令编码器"),
+                },
+            );
+
+            for (id, image_delta) in &full_output.textures_delta.set {
+                egui_renderer.update_texture(
+                    &renderer_ref.device,
+                    &renderer_ref.queue,
+                    *id,
+                    image_delta,
+                );
+            }
+
+            egui_renderer.update_buffers(
+                &renderer_ref.device,
+                &renderer_ref.queue,
+                &mut encoder,
+                &paint_jobs,
+                &screen_descriptor,
+            );
+
+            {
+                let egui_render_pass =
+                    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("egui 渲染通道"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                    });
+
+                let mut static_pass = egui_render_pass.forget_lifetime();
+                egui_renderer.render(&mut static_pass, &paint_jobs, &screen_descriptor);
+            }
+
+            for id in &full_output.textures_delta.free {
+                egui_renderer.free_texture(id);
+            }
+
+            renderer_ref.queue.submit(std::iter::once(encoder.finish()));
+        }
+
+        output.present();
+        window.request_redraw();
+    }
 }
 
 impl ApplicationHandler<AppEvent> for App {
@@ -359,7 +436,7 @@ impl ApplicationHandler<AppEvent> for App {
         #[cfg(target_family = "wasm")]
         {
             use wasm_bindgen_futures::spawn_local;
-            let proxy = self.event_proxy.clone();
+            let proxy = self.event_proxy.clone().unwrap();
             let egui_ctx = self.egui_ctx.clone();
             let scale_factor = scale_factor as f32;
             spawn_local(async move {
@@ -602,82 +679,6 @@ impl ApplicationHandler<AppEvent> for App {
             }
             _ => {}
         }
-    }
-
-    /// 渲染 egui 覆盖层：结束 egui 帧、绘制到主视图并提交队列
-    fn render_egui_overlay(
-        &mut self,
-        window: &'static Window,
-        output: wgpu::SurfaceTexture,
-        view: wgpu::TextureView,
-    ) {
-        if let (Some(egui_renderer), Some(renderer_ref)) =
-            (self.egui_renderer.as_mut(), self.renderer.as_ref())
-        {
-            let screen_descriptor = egui_wgpu::ScreenDescriptor {
-                size_in_pixels: [renderer_ref.config.width, renderer_ref.config.height],
-                pixels_per_point: window.scale_factor() as f32,
-            };
-
-            // end_pass 在此处调用（与 begin_pass 配对）
-            let full_output = self.egui_ctx.end_pass();
-            let paint_jobs = self
-                .egui_ctx
-                .tessellate(full_output.shapes, screen_descriptor.pixels_per_point);
-
-            let mut encoder = renderer_ref.device.create_command_encoder(
-                &wgpu::CommandEncoderDescriptor {
-                    label: Some("egui 命令编码器"),
-                },
-            );
-
-            for (id, image_delta) in &full_output.textures_delta.set {
-                egui_renderer.update_texture(
-                    &renderer_ref.device,
-                    &renderer_ref.queue,
-                    *id,
-                    image_delta,
-                );
-            }
-
-            egui_renderer.update_buffers(
-                &renderer_ref.device,
-                &renderer_ref.queue,
-                &mut encoder,
-                &paint_jobs,
-                &screen_descriptor,
-            );
-
-            {
-                let egui_render_pass =
-                    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("egui 渲染通道"),
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: &view,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Load,
-                                store: wgpu::StoreOp::Store,
-                            },
-                        })],
-                        depth_stencil_attachment: None,
-                        timestamp_writes: None,
-                        occlusion_query_set: None,
-                    });
-
-                let mut static_pass = egui_render_pass.forget_lifetime();
-                egui_renderer.render(&mut static_pass, &paint_jobs, &screen_descriptor);
-            }
-
-            for id in &full_output.textures_delta.free {
-                egui_renderer.free_texture(id);
-            }
-
-            renderer_ref.queue.submit(std::iter::once(encoder.finish()));
-        }
-
-        output.present();
-        window.request_redraw();
     }
 
     fn about_to_wait(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {

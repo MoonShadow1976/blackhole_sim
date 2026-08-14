@@ -392,7 +392,7 @@ impl App {
             };
             if resp.clicked() {
                 self.sim.paused = true;
-                if let Err(err) = self.sim.add_black_hole(candidate) {
+                if let Err(err) = self.sim.add_black_hole(candidate.clone()) {
                     eprintln!("添加黑洞失败: {:?}", err);
                 }
             }
@@ -484,7 +484,7 @@ impl App {
             };
             if resp.clicked() {
                 self.sim.paused = true;
-                if let Err(err) = self.sim.add_body(candidate) {
+                if let Err(err) = self.sim.add_body(candidate.clone()) {
                     eprintln!("添加天体失败: {:?}", err);
                 }
             }
