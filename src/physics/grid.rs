@@ -184,14 +184,7 @@ impl Simulation {
     /// 网格中心跟随质心：使用 0.85/0.15 平滑系数（约 7 帧响应）
     pub(crate) fn update_grid_points(&mut self) {
         // 网格跟随黑洞质心移动（响应速率 0.15/帧，约 7 帧达到 95%）
-        if !self.black_holes.is_empty() {
-            let total_mass: f32 = self.black_holes.iter().map(|bh| bh.mass).sum();
-            let com = self
-                .black_holes
-                .iter()
-                .map(|bh| bh.pos * bh.mass)
-                .sum::<Vector3<f32>>()
-                / total_mass;
+        if let Some(com) = self.center_of_mass() {
             self.grid_center = self.grid_center * 0.85 + com * 0.15;
         }
 

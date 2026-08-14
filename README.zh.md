@@ -17,6 +17,7 @@
 - **潮汐撕裂与事件视界吸收**：基于 Hills 质量的分支判断
 - **引力波推迟传播**：辐射场以光速 c 传播，近场瞬时
 - **轨迹预测**：可视化黑洞/天体的未来路径（含辐射阻力）
+- **生成安全校验**：添加黑洞/天体时实时检查事件视界、合并阈值、洛希极限与天体重叠，防止瞬间合并/被吞噬/碰撞；一键"自动避让"到安全位置
 - **实例化渲染**：高效的轨迹与碎片可视化
 
 ## 物理理论
@@ -258,11 +259,13 @@ $$
 ```
 src/
 ├── main.rs              # 应用入口，事件循环，ApplicationHandler
-├── ui.rs                # egui 面板，坐标轴 gizmo
+├── ui.rs                # egui 面板，坐标轴 gizmo，添加安全校验提示
 ├── camera.rs            # 相机控制和透视投影
 ├── geometry.rs          # 球体/圆环几何体生成
 ├── physics/
 │   ├── mod.rs           # Simulation 结构体，gw_radiation_reaction (Peters 公式)
+│   ├── integrator.rs    # 统一引力积分器（实时模拟与轨迹预测共用）
+│   ├── spawn.rs         # 生成校验：防止瞬间合并/吞噬/碰撞
 │   ├── grid.rs          # Tendex 线：潮汐张量计算和特征分解
 │   ├── collision.rs     # 黑洞合并 (ISCO)，视界吸收 (Hills)，洛希撕裂
 │   └── trajectory.rs    # 轨迹预测（含辐射阻力）
@@ -277,7 +280,15 @@ src/
 
 - **[physics/mod.rs](src/physics/mod.rs)** - 核心物理：
   - `gw_radiation_reaction()` - Peters 1964 公式实现，含 plunge 阶段增强
-  - `update_black_holes/bodies/debris()` - 三类天体的引力 + 辐射阻力更新
+  - `update_debris()` - 碎片粒子的引力 + 辐射阻力更新
+  - `center_of_mass()` - 黑洞质量加权质心（相机跟随与网格中心共用）
+
+- **[physics/integrator.rs](src/physics/integrator.rs)** - 统一引力积分器：
+  - `step_gravity()` - 黑洞与天体的单步推进，实时模拟与轨迹预测共用同一实现，预览轨迹与实际演化严格一致
+
+- **[physics/spawn.rs](src/physics/spawn.rs)** - 生成校验与自动避让：
+  - `check_black_hole_spawn() / check_body_spawn()` - 拒绝事件视界内/合并阈值内/洛希极限内/与已有天体重叠的生成位置（含 20% 安全裕度）
+  - `safe_black_hole_pos() / safe_body_pos()` - 把冲突位置沿径向推出到最近的安全距离
 
 - **[physics/grid.rs](src/physics/grid.rs)** - Tendex 线时空曲率可视化：
   - `compute_tidal_tensor()` - 计算潮汐张量 $E_{jk}$（含引力波推迟贡献）
@@ -337,6 +348,7 @@ Web 版通过 `wgpu` 使用 WebGL2 后端，保证浏览器兼容性。
 - **鼠标**：旋转相机
 - **滚轮**：缩放
 - **UI 面板**：添加黑洞/天体，调整参数，切换可视化选项
+  - 添加前实时校验位置安全性（距黑洞/天体过近时按钮禁用并显示原因），可点击 **🛡 自动避让** 一键调整到安全位置
   - **引力波**：开关 Tendex 网格可视化
   - **仅三正交面**：仅显示 XY/YZ/XZ 中心面（更清晰的横截面）
   - **格点数量 / 格点间距**：调整网格分辨率和物理尺度

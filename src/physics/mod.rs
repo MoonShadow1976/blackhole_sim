@@ -5,9 +5,12 @@ use nalgebra::Vector3;
 
 mod collision;
 mod grid;
+mod integrator;
+mod spawn;
 mod trajectory;
 
 pub use grid::TendexPoint;
+pub use spawn::SpawnError;
 #[allow(unused_imports)]
 pub use trajectory::TrailData;
 
@@ -149,20 +152,26 @@ impl Simulation {
         *self = Self::new();
     }
 
-    pub fn add_black_hole(&mut self, bh: BlackHole) {
-        if self.black_holes.len() < MAX_BH {
-            self.black_holes.push(bh);
-        }
-    }
-
-    pub fn add_body(&mut self, body: CelestialBody) {
-        if self.bodies.len() < MAX_BODIES {
-            self.bodies.push(body);
-        }
-    }
-
     pub fn black_hole_count(&self) -> usize {
         self.black_holes.len()
+    }
+
+    /// 所有黑洞的质量加权质心（无黑洞或总质量非正时返回 None）
+    pub fn center_of_mass(&self) -> Option<Vector3<f32>> {
+        if self.black_holes.is_empty() {
+            return None;
+        }
+        let total_mass: f32 = self.black_holes.iter().map(|bh| bh.mass).sum();
+        if total_mass <= 0.0 {
+            return None;
+        }
+        Some(
+            self.black_holes
+                .iter()
+                .map(|bh| bh.pos * bh.mass)
+                .sum::<Vector3<f32>>()
+                / total_mass,
+        )
     }
 
     /// Schwarzschild 半径 rs = 2*M
@@ -187,8 +196,8 @@ impl Simulation {
         }
         self.time += dt;
 
-        self.update_black_holes(dt);
-        self.update_bodies(dt);
+        // 黑洞 + 天体统一积分（与轨迹预测共用 integrator::step_gravity）
+        integrator::step_gravity(&mut self.black_holes, &mut self.bodies, dt);
         self.update_debris(dt);
         self.check_mergers();
         self.check_event_horizon_absorption();
@@ -200,96 +209,6 @@ impl Simulation {
 
         // 更新网格点扭曲
         self.update_grid_points();
-    }
-
-    fn update_black_holes(&mut self, dt: f32) {
-        let n = self.black_holes.len();
-        if n < 2 {
-            for bh in self.black_holes.iter_mut() {
-                bh.pos += bh.vel * dt;
-            }
-            return;
-        }
-
-        let mut accelerations: Vec<Vector3<f32>> = vec![Vector3::zeros(); n];
-
-        for i in 0..n {
-            for j in (i + 1)..n {
-                let delta = self.black_holes[j].pos - self.black_holes[i].pos;
-                let r = delta.norm().max(0.1);
-                let dir = delta / r;
-                let m1 = self.black_holes[i].mass;
-                let m2 = self.black_holes[j].mass;
-
-                // 牛顿引力
-                let force_mag = G * m1 * m2 / (r * r);
-                accelerations[i] += dir * force_mag / m1;
-                accelerations[j] -= dir * force_mag / m2;
-
-                // 引力波辐射反作用力 (Peters 1964, 2.5PN)
-                // 导致轨道能量损失，双黑洞旋进合并
-                let v_rel = self.black_holes[j].vel - self.black_holes[i].vel;
-                let (a_i_rad, a_j_rad) = gw_radiation_reaction(m1, m2, r, v_rel);
-                accelerations[i] += a_i_rad;
-                accelerations[j] += a_j_rad;
-            }
-        }
-
-        let mut new_vels = Vec::with_capacity(n);
-        for (bh, acc) in self.black_holes.iter().zip(accelerations.iter()) {
-            new_vels.push(bh.vel + acc * dt);
-        }
-        for (bh, v) in self.black_holes.iter_mut().zip(new_vels.iter()) {
-            bh.vel = *v;
-            bh.pos += *v * dt;
-        }
-    }
-
-    fn update_bodies(&mut self, dt: f32) {
-        let _n_bh = self.black_holes.len();
-        let n_body = self.bodies.len();
-        if n_body == 0 {
-            return;
-        }
-
-        let mut accelerations: Vec<Vector3<f32>> = vec![Vector3::zeros(); n_body];
-
-        // 天体受所有黑洞引力 + 引力波辐射反作用力
-        for (i, body) in self.bodies.iter().enumerate() {
-            for bh in &self.black_holes {
-                let delta = bh.pos - body.pos;
-                let r = delta.norm().max(0.1);
-                let dir = delta / r;
-                let force_mag = G * bh.mass / (r * r);
-                accelerations[i] += dir * force_mag;
-
-                // 引力波辐射反作用力 (天体-黑洞对)
-                // v_rel = v_bh - v_body (j=bh, i=body)
-                let v_rel = bh.vel - body.vel;
-                let (a_body_rad, _a_bh_rad) = gw_radiation_reaction(body.mass, bh.mass, r, v_rel);
-                accelerations[i] += a_body_rad;
-            }
-            // 天体之间也有微弱引力
-            for (j, other) in self.bodies.iter().enumerate() {
-                if i == j {
-                    continue;
-                }
-                let delta = other.pos - body.pos;
-                let r = delta.norm().max(0.1);
-                let dir = delta / r;
-                let force_mag = G * other.mass / (r * r);
-                accelerations[i] += dir * force_mag * 0.1;
-            }
-        }
-
-        let mut new_vels = Vec::with_capacity(n_body);
-        for (body, acc) in self.bodies.iter().zip(accelerations.iter()) {
-            new_vels.push(body.vel + acc * dt);
-        }
-        for (body, v) in self.bodies.iter_mut().zip(new_vels.iter()) {
-            body.vel = *v;
-            body.pos += *v * dt;
-        }
     }
 
     fn update_debris(&mut self, dt: f32) {

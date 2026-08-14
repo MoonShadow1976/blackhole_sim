@@ -39,16 +39,10 @@ use winit::{
     application::ApplicationHandler,
     dpi::PhysicalPosition,
     event::{ElementState, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent},
-    event_loop::ControlFlow,
+    event_loop::{ControlFlow, EventLoop, EventLoopProxy},
     keyboard::{KeyCode, PhysicalKey},
     window::Window,
 };
-
-#[cfg(target_family = "wasm")]
-use winit::event_loop::{EventLoop, EventLoopProxy};
-
-#[cfg(not(target_family = "wasm"))]
-use winit::event_loop::EventLoop;
 
 #[cfg(target_family = "wasm")]
 use wasm_bindgen::prelude::*;
@@ -76,6 +70,49 @@ enum WasmAppEvent {
     },
 }
 
+/// 待添加对象的参数（质量/位置/速度），供 UI 编辑、实时安全校验与轨迹预览共用
+#[derive(Clone, Copy)]
+pub(crate) struct SpawnParams {
+    pub mass: f32,
+    pub pos: nalgebra::Vector3<f32>,
+    pub vel: nalgebra::Vector3<f32>,
+}
+
+impl SpawnParams {
+    pub(crate) fn default_black_hole() -> Self {
+        Self {
+            mass: 2.0,
+            pos: nalgebra::Vector3::new(7.5, 0.0, 0.0),
+            vel: nalgebra::Vector3::new(0.0, 0.0, -0.3),
+        }
+    }
+
+    pub(crate) fn default_body() -> Self {
+        Self {
+            mass: 0.3,
+            pos: nalgebra::Vector3::new(6.0, 0.5, 0.0),
+            vel: nalgebra::Vector3::new(0.0, 0.0, 0.6),
+        }
+    }
+
+    pub(crate) fn to_black_hole(&self) -> physics::BlackHole {
+        physics::BlackHole {
+            mass: self.mass,
+            pos: self.pos,
+            vel: self.vel,
+        }
+    }
+
+    pub(crate) fn to_body(&self) -> physics::CelestialBody {
+        physics::CelestialBody {
+            mass: self.mass,
+            pos: self.pos,
+            vel: self.vel,
+            hardness: 1.0, // 默认岩石材质
+        }
+    }
+}
+
 /// 应用状态
 struct App {
     pub(crate) renderer: Option<Renderer>,
@@ -90,37 +127,17 @@ struct App {
     pub(crate) active_touches: Vec<(u64, PhysicalPosition<f64>)>,
     pub(crate) last_pinch_dist: Option<f64>,
     pub(crate) window: Option<&'static Window>,
-    #[cfg(target_family = "wasm")]
-    pub(crate) event_proxy: EventLoopProxy<AppEvent>,
-    // UI 临时状态
-    pub(crate) ui_show_waves: bool,
+    /// WASM 端事件代理（桌面端为 None）
+    pub(crate) event_proxy: Option<EventLoopProxy<AppEvent>>,
+    // UI 显示状态
     pub(crate) ui_show_background: bool,
     pub(crate) ui_show_bodies: bool,
-    pub(crate) ui_sim_speed: f32,
-    pub(crate) ui_paused: bool,
-    pub(crate) ui_reset: bool,
-    // 添加黑洞的参数
-    pub(crate) ui_add_mass: f32,
-    pub(crate) ui_add_pos_x: f32,
-    pub(crate) ui_add_pos_y: f32,
-    pub(crate) ui_add_pos_z: f32,
-    pub(crate) ui_add_vel_x: f32,
-    pub(crate) ui_add_vel_y: f32,
-    pub(crate) ui_add_vel_z: f32,
-    // 添加天体的参数
-    pub(crate) ui_body_mass: f32,
-    pub(crate) ui_body_pos_x: f32,
-    pub(crate) ui_body_pos_y: f32,
-    pub(crate) ui_body_pos_z: f32,
-    pub(crate) ui_body_vel_x: f32,
-    pub(crate) ui_body_vel_y: f32,
-    pub(crate) ui_body_vel_z: f32,
-    // 轨迹预测
     pub(crate) ui_show_trails: bool,
-    // 界面语言
-    pub(crate) ui_lang: UiLang,
-    // 控制面板显示状态
     pub(crate) ui_show_panel: bool,
+    pub(crate) ui_lang: UiLang,
+    // 添加黑洞 / 天体的参数
+    pub(crate) spawn_bh: SpawnParams,
+    pub(crate) spawn_body: SpawnParams,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -130,59 +147,17 @@ pub(crate) enum UiLang {
 }
 
 impl App {
-    #[cfg(not(target_family = "wasm"))]
-    fn new() -> Self {
+    /// 创建应用。WASM 端传入事件代理；桌面端传 None。
+    fn new(event_proxy: Option<EventLoopProxy<AppEvent>>) -> Self {
         let sim = Simulation::new();
         Self {
             renderer: None,
             camera: OrbitCamera::new(),
-            ui_show_waves: sim.show_gravity_waves,
             ui_show_background: true,
             ui_show_bodies: true,
-            ui_sim_speed: sim.sim_speed,
-            ui_paused: sim.paused,
-            sim,
-            egui_ctx: egui::Context::default(),
-            egui_state: None,
-            egui_renderer: None,
-            last_frame: None,
-            mouse_pressed: false,
-            last_mouse_pos: None,
-            active_touches: Vec::new(),
-            last_pinch_dist: None,
-            window: None,
-            ui_reset: false,
-            ui_add_mass: 2.0,
-            ui_add_pos_x: 7.5,
-            ui_add_pos_y: 0.0,
-            ui_add_pos_z: 0.0,
-            ui_add_vel_x: 0.0,
-            ui_add_vel_y: 0.0,
-            ui_add_vel_z: -0.3,
-            ui_body_mass: 0.3,
-            ui_body_pos_x: 6.0,
-            ui_body_pos_y: 0.5,
-            ui_body_pos_z: 0.0,
-            ui_body_vel_x: 0.0,
-            ui_body_vel_y: 0.0,
-            ui_body_vel_z: 0.6,
             ui_show_trails: true,
-            ui_lang: UiLang::Zh,
             ui_show_panel: true,
-        }
-    }
-
-    #[cfg(target_family = "wasm")]
-    fn new(event_proxy: EventLoopProxy<AppEvent>) -> Self {
-        let sim = Simulation::new();
-        Self {
-            renderer: None,
-            camera: OrbitCamera::new(),
-            ui_show_waves: sim.show_gravity_waves,
-            ui_show_background: true,
-            ui_show_bodies: true,
-            ui_sim_speed: sim.sim_speed,
-            ui_paused: sim.paused,
+            ui_lang: UiLang::Zh,
             sim,
             egui_ctx: egui::Context::default(),
             egui_state: None,
@@ -194,24 +169,8 @@ impl App {
             last_pinch_dist: None,
             window: None,
             event_proxy,
-            ui_reset: false,
-            ui_add_mass: 2.0,
-            ui_add_pos_x: 7.5,
-            ui_add_pos_y: 0.0,
-            ui_add_pos_z: 0.0,
-            ui_add_vel_x: 0.0,
-            ui_add_vel_y: 0.0,
-            ui_add_vel_z: -0.3,
-            ui_body_mass: 0.3,
-            ui_body_pos_x: 6.0,
-            ui_body_pos_y: 0.5,
-            ui_body_pos_z: 0.0,
-            ui_body_vel_x: 0.0,
-            ui_body_vel_y: 0.0,
-            ui_body_vel_z: 0.6,
-            ui_show_trails: true,
-            ui_lang: UiLang::Zh,
-            ui_show_panel: true,
+            spawn_bh: SpawnParams::default_black_hole(),
+            spawn_body: SpawnParams::default_body(),
         }
     }
 
@@ -230,11 +189,95 @@ impl App {
             KeyCode::ArrowUp => self.camera.rotate_pitch(-rot_step),
             KeyCode::ArrowDown => self.camera.rotate_pitch(rot_step),
             KeyCode::Space => {
-                self.ui_paused = !self.ui_paused;
-                self.sim.paused = self.ui_paused;
+                self.sim.paused = !self.sim.paused;
             }
             _ => {}
         }
+    }
+
+    /// 构建轨迹预览实例（暂停时显示）：
+    /// - 黑洞轨迹：橙色 (color_type=0)，方形 (shape_type=0)
+    /// - 天体轨迹：青色 (color_type=1)，三角形 (shape_type=1)
+    /// - 待添加黑洞预览：粉紫色 (color_type=3)，方形
+    /// - 待添加天体预览：黄色 (color_type=2)，三角形
+    fn build_trail_instances(&self) -> Vec<renderer::TrailInstance> {
+        if !self.ui_show_trails || !self.sim.paused {
+            return Vec::new();
+        }
+        let mut instances = Vec::new();
+        // 模拟 72 秒，每步 0.03s（2400 步）
+        let steps = 2400;
+        let dt_step = 0.03;
+        let (bh_trails, body_trails) = self.sim.predict_trajectories(steps, dt_step);
+
+        for trail in &bh_trails {
+            let n = trail.len();
+            for (i, pos) in trail.iter().enumerate() {
+                let fade = i as f32 / n.max(1) as f32;
+                instances.push(renderer::TrailInstance {
+                    pos: [pos.x, pos.y, pos.z],
+                    color_type: 0.0,
+                    shape_type: 0.0,
+                    fade,
+                    _pad: [0.0; 1],
+                });
+            }
+        }
+        for trail in &body_trails {
+            let n = trail.len();
+            for (i, pos) in trail.iter().enumerate() {
+                let fade = i as f32 / n.max(1) as f32;
+                instances.push(renderer::TrailInstance {
+                    pos: [pos.x, pos.y, pos.z],
+                    color_type: 1.0,
+                    shape_type: 1.0,
+                    fade,
+                    _pad: [0.0; 1],
+                });
+            }
+        }
+
+        // 待添加黑洞的轨迹预览（在克隆状态末尾，取最后一条）
+        let preview_bh = self.spawn_bh.to_black_hole();
+        let (preview_bh_trails, _) =
+            self.sim
+                .predict_trajectories_with_black_hole(&preview_bh, steps, dt_step);
+        if let Some(preview) = preview_bh_trails.last() {
+            let n = preview.len();
+            for (i, pos) in preview.iter().enumerate() {
+                let fade = i as f32 / n.max(1) as f32;
+                instances.push(renderer::TrailInstance {
+                    pos: [pos.x, pos.y, pos.z],
+                    color_type: 3.0,
+                    shape_type: 0.0,
+                    fade,
+                    _pad: [0.0; 1],
+                });
+            }
+        }
+
+        // 待添加天体的轨迹预览
+        let preview_body = self.spawn_body.to_body();
+        let (_, preview_trails) =
+            self.sim
+                .predict_trajectories_with_body(&preview_body, steps, dt_step);
+        if let Some(preview) = preview_trails.last() {
+            let n = preview.len();
+            for (i, pos) in preview.iter().enumerate() {
+                let fade = i as f32 / n.max(1) as f32;
+                instances.push(renderer::TrailInstance {
+                    pos: [pos.x, pos.y, pos.z],
+                    color_type: 2.0,
+                    shape_type: 1.0,
+                    fade,
+                    _pad: [0.0; 1],
+                });
+            }
+        }
+
+        // 限制总数到 4000
+        instances.truncate(4000);
+        instances
     }
 }
 
@@ -283,7 +326,7 @@ impl ApplicationHandler<AppEvent> for App {
 
         #[cfg(target_family = "wasm")]
         {
-            let proxy = self.event_proxy.clone();
+            let proxy = self.event_proxy.clone().unwrap();
             wasm_bindgen_futures::spawn_local(async move {
                 if let Some(font_data) = load_chinese_font_async().await {
                     let _ = proxy.send_event(WasmAppEvent::ChineseFontLoaded(font_data));
@@ -476,19 +519,9 @@ impl ApplicationHandler<AppEvent> for App {
 
                 self.sim.update(dt.min(0.05));
 
-                // 相机 target 跟随所有天体的质心
-                if !self.sim.black_holes.is_empty() {
-                    let total_mass: f32 = self.sim.black_holes.iter().map(|bh| bh.mass).sum();
-                    if total_mass > 0.0 {
-                        let com: nalgebra::Vector3<f32> = self
-                            .sim
-                            .black_holes
-                            .iter()
-                            .map(|bh| bh.pos * bh.mass)
-                            .sum::<nalgebra::Vector3<f32>>()
-                            / total_mass;
-                        self.camera.target = com;
-                    }
+                // 相机 target 跟随所有黑洞的质心
+                if let Some(com) = self.sim.center_of_mass() {
+                    self.camera.target = com;
                 }
 
                 let window_ref: &'static Window = match self.window.as_ref() {
@@ -512,136 +545,23 @@ impl ApplicationHandler<AppEvent> for App {
                 let body_data = self.sim.get_body_render_data();
                 let debris_data = self.sim.get_debris_render_data();
 
-                // 计算轨迹预测（暂停时显示，N 尽可能大）
-                let trail_instances: Vec<renderer::TrailInstance> = if self.ui_show_trails
-                    && self.ui_paused
-                {
-                    let mut instances = Vec::new();
-                    // 模拟 60 秒，每步 0.05s（1200 步）
-                    let steps = 2400;
-                    let dt_step = 0.03;
-                    let (bh_trails, body_trails) = self.sim.predict_trajectories(steps, dt_step);
-
-                    // 黑洞轨迹：橙色 (color_type=0)，方形 (shape_type=0)
-                    for trail in &bh_trails {
-                        let n = trail.len();
-                        for (i, pos) in trail.iter().enumerate() {
-                            let fade = i as f32 / n.max(1) as f32;
-                            instances.push(renderer::TrailInstance {
-                                pos: [pos.x, pos.y, pos.z],
-                                color_type: 0.0,
-                                shape_type: 0.0,
-                                fade,
-                                _pad: [0.0; 1],
-                            });
-                        }
-                    }
-                    // 天体轨迹：青色 (color_type=1)，三角形 (shape_type=1)
-                    for trail in &body_trails {
-                        let n = trail.len();
-                        for (i, pos) in trail.iter().enumerate() {
-                            let fade = i as f32 / n.max(1) as f32;
-                            instances.push(renderer::TrailInstance {
-                                pos: [pos.x, pos.y, pos.z],
-                                color_type: 1.0,
-                                shape_type: 1.0,
-                                fade,
-                                _pad: [0.0; 1],
-                            });
-                        }
-                    }
-
-                    // 如果正在配置黑洞参数，预览新黑洞轨迹（粉紫色 color_type=3），方形 (shape_type=0)
-                    let preview_bh = physics::BlackHole {
-                        mass: self.ui_add_mass,
-                        pos: nalgebra::Vector3::new(
-                            self.ui_add_pos_x,
-                            self.ui_add_pos_y,
-                            self.ui_add_pos_z,
-                        ),
-                        vel: nalgebra::Vector3::new(
-                            self.ui_add_vel_x,
-                            self.ui_add_vel_y,
-                            self.ui_add_vel_z,
-                        ),
-                    };
-                    let (preview_bh_trails, _) =
-                        self.sim
-                            .predict_trajectories_with_black_hole(&preview_bh, steps, dt_step);
-                    if let Some(preview) = preview_bh_trails.last() {
-                        let n = preview.len();
-                        for (i, pos) in preview.iter().enumerate() {
-                            let fade = i as f32 / n.max(1) as f32;
-                            instances.push(renderer::TrailInstance {
-                                pos: [pos.x, pos.y, pos.z],
-                                color_type: 3.0,
-                                shape_type: 0.0,
-                                fade,
-                                _pad: [0.0; 1],
-                            });
-                        }
-                    }
-
-                    // 如果正在配置天体参数，预览新天体轨迹（黄色 color_type=2），三角形 (shape_type=1)
-                    let preview_body = physics::CelestialBody {
-                        mass: self.ui_body_mass,
-                        pos: nalgebra::Vector3::new(
-                            self.ui_body_pos_x,
-                            self.ui_body_pos_y,
-                            self.ui_body_pos_z,
-                        ),
-                        vel: nalgebra::Vector3::new(
-                            self.ui_body_vel_x,
-                            self.ui_body_vel_y,
-                            self.ui_body_vel_z,
-                        ),
-                        hardness: 1.0,
-                    };
-                    let (_, preview_trails) =
-                        self.sim
-                            .predict_trajectories_with_body(&preview_body, steps, dt_step);
-                    if let Some(preview) = preview_trails.last() {
-                        let n = preview.len();
-                        for (i, pos) in preview.iter().enumerate() {
-                            let fade = i as f32 / n.max(1) as f32;
-                            instances.push(renderer::TrailInstance {
-                                pos: [pos.x, pos.y, pos.z],
-                                color_type: 2.0,
-                                shape_type: 1.0,
-                                fade,
-                                _pad: [0.0; 1],
-                            });
-                        }
-                    }
-
-                    // 限制总数到 4000
-                    instances.truncate(4000);
-                    instances
-                } else {
-                    Vec::new()
-                };
+                // 计算轨迹预测（暂停时显示，含新对象预览轨迹）
+                let trail_instances = self.build_trail_instances();
 
                 // 渲染 3D 场景
                 let (output, view) = {
                     let Some(renderer) = self.renderer.as_mut() else {
                         return;
                     };
-                    let preview_black_hole = if self.ui_paused && self.ui_show_trails {
-                        Some((
-                            nalgebra::Vector3::new(
-                                self.ui_add_pos_x,
-                                self.ui_add_pos_y,
-                                self.ui_add_pos_z,
-                            ),
-                            self.ui_add_mass,
-                        ))
+                    let preview_black_hole = if self.sim.paused && self.ui_show_trails {
+                        Some((self.spawn_bh.pos, self.spawn_bh.mass))
                     } else {
                         None
                     };
-                    let preview_body = if self.ui_paused && self.ui_show_trails {
+                    let preview_body = if self.sim.paused && self.ui_show_trails {
                         Some((
-                            [self.ui_body_pos_x, self.ui_body_pos_y, self.ui_body_pos_z],
-                            self.ui_body_mass,
+                            [self.spawn_body.pos.x, self.spawn_body.pos.y, self.spawn_body.pos.z],
+                            self.spawn_body.mass,
                         ))
                     } else {
                         None
@@ -677,77 +597,87 @@ impl ApplicationHandler<AppEvent> for App {
                     }
                 };
 
-                // 渲染 egui（此时调用 end_pass 获取 shapes）
-                if let (Some(egui_renderer), Some(renderer_ref)) =
-                    (self.egui_renderer.as_mut(), self.renderer.as_ref())
-                {
-                    let screen_descriptor = egui_wgpu::ScreenDescriptor {
-                        size_in_pixels: [renderer_ref.config.width, renderer_ref.config.height],
-                        pixels_per_point: window_ref.scale_factor() as f32,
-                    };
-
-                    // end_pass 在此处调用（与 begin_pass 配对）
-                    let full_output = self.egui_ctx.end_pass();
-                    let paint_jobs = self
-                        .egui_ctx
-                        .tessellate(full_output.shapes, screen_descriptor.pixels_per_point);
-
-                    let mut encoder = renderer_ref.device.create_command_encoder(
-                        &wgpu::CommandEncoderDescriptor {
-                            label: Some("egui 命令编码器"),
-                        },
-                    );
-
-                    for (id, image_delta) in &full_output.textures_delta.set {
-                        egui_renderer.update_texture(
-                            &renderer_ref.device,
-                            &renderer_ref.queue,
-                            *id,
-                            image_delta,
-                        );
-                    }
-
-                    egui_renderer.update_buffers(
-                        &renderer_ref.device,
-                        &renderer_ref.queue,
-                        &mut encoder,
-                        &paint_jobs,
-                        &screen_descriptor,
-                    );
-
-                    {
-                        let egui_render_pass =
-                            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                label: Some("egui 渲染通道"),
-                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                    view: &view,
-                                    resolve_target: None,
-                                    ops: wgpu::Operations {
-                                        load: wgpu::LoadOp::Load,
-                                        store: wgpu::StoreOp::Store,
-                                    },
-                                })],
-                                depth_stencil_attachment: None,
-                                timestamp_writes: None,
-                                occlusion_query_set: None,
-                            });
-
-                        let mut static_pass = egui_render_pass.forget_lifetime();
-                        egui_renderer.render(&mut static_pass, &paint_jobs, &screen_descriptor);
-                    }
-
-                    for id in &full_output.textures_delta.free {
-                        egui_renderer.free_texture(id);
-                    }
-
-                    renderer_ref.queue.submit(std::iter::once(encoder.finish()));
-                }
-
-                output.present();
-                window_ref.request_redraw();
+                // 渲染 egui 覆盖层并提交（end_pass 与 begin_pass 配对）
+                self.render_egui_overlay(window_ref, output, view);
             }
             _ => {}
         }
+    }
+
+    /// 渲染 egui 覆盖层：结束 egui 帧、绘制到主视图并提交队列
+    fn render_egui_overlay(
+        &mut self,
+        window: &'static Window,
+        output: wgpu::SurfaceTexture,
+        view: wgpu::TextureView,
+    ) {
+        if let (Some(egui_renderer), Some(renderer_ref)) =
+            (self.egui_renderer.as_mut(), self.renderer.as_ref())
+        {
+            let screen_descriptor = egui_wgpu::ScreenDescriptor {
+                size_in_pixels: [renderer_ref.config.width, renderer_ref.config.height],
+                pixels_per_point: window.scale_factor() as f32,
+            };
+
+            // end_pass 在此处调用（与 begin_pass 配对）
+            let full_output = self.egui_ctx.end_pass();
+            let paint_jobs = self
+                .egui_ctx
+                .tessellate(full_output.shapes, screen_descriptor.pixels_per_point);
+
+            let mut encoder = renderer_ref.device.create_command_encoder(
+                &wgpu::CommandEncoderDescriptor {
+                    label: Some("egui 命令编码器"),
+                },
+            );
+
+            for (id, image_delta) in &full_output.textures_delta.set {
+                egui_renderer.update_texture(
+                    &renderer_ref.device,
+                    &renderer_ref.queue,
+                    *id,
+                    image_delta,
+                );
+            }
+
+            egui_renderer.update_buffers(
+                &renderer_ref.device,
+                &renderer_ref.queue,
+                &mut encoder,
+                &paint_jobs,
+                &screen_descriptor,
+            );
+
+            {
+                let egui_render_pass =
+                    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("egui 渲染通道"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                    });
+
+                let mut static_pass = egui_render_pass.forget_lifetime();
+                egui_renderer.render(&mut static_pass, &paint_jobs, &screen_descriptor);
+            }
+
+            for id in &full_output.textures_delta.free {
+                egui_renderer.free_texture(id);
+            }
+
+            renderer_ref.queue.submit(std::iter::once(encoder.finish()));
+        }
+
+        output.present();
+        window.request_redraw();
     }
 
     fn about_to_wait(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
@@ -793,7 +723,7 @@ fn main() {
     let event_loop = EventLoop::<AppEvent>::with_user_event()
         .build()
         .expect("无法创建事件循环");
-    let mut app = App::new();
+    let mut app = App::new(None);
     event_loop.run_app(&mut app).expect("事件循环错误");
 }
 
@@ -839,7 +769,7 @@ pub fn start() -> Result<(), JsValue> {
 
     let _ = EVENT_PROXY.set(proxy.clone());
 
-    let mut app = App::new(proxy);
+    let mut app = App::new(Some(proxy));
 
     wasm_bindgen_futures::spawn_local(async move {
         let _ = event_loop.run_app(&mut app);

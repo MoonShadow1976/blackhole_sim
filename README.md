@@ -1,4 +1,4 @@
-[中文版本](README_CN.md)
+[中文版本](README.zh.md)
 
 ---
 
@@ -18,6 +18,7 @@ A real-time 3D black hole simulation with gravitational wave radiation, orbital 
 - **Tidal disruption and event horizon absorption** with Hills-mass branching
 - **Gravitational wave retarded propagation**: radiative field at speed c, near-field instantaneous
 - **Trajectory prediction** with radiation damping
+- **Spawn safety validation**: real-time checks against event horizons, merger thresholds, Roche limits and body overlap when adding black holes/bodies — prevents instant mergers/absorption/collisions; one-click "Safe Pos" auto-avoidance
 - **Instanced rendering** for efficient trail and debris visualization
 
 ## Physics Theory
@@ -262,11 +263,13 @@ All mass sources (black holes and ordinary bodies) produce tidal effects, superp
 ```
 src/
 ├── main.rs              # Application entry, event loop, ApplicationHandler
-├── ui.rs                # egui panel, axis gizmo
+├── ui.rs                # egui panel, axis gizmo, spawn safety indicators
 ├── camera.rs            # Camera control and perspective projection
 ├── geometry.rs          # Sphere/torus geometry generation
 ├── physics/
 │   ├── mod.rs           # Simulation struct, gw_radiation_reaction (Peters formula)
+│   ├── integrator.rs    # Shared gravity integrator (live sim & trajectory prediction)
+│   ├── spawn.rs         # Spawn validation: prevent instant merger/absorption/collision
 │   ├── grid.rs          # Tendex lines: tidal tensor computation and eigendecomposition
 │   ├── collision.rs     # Black hole merger (ISCO), horizon absorption (Hills), Roche disruption
 │   └── trajectory.rs    # Trajectory prediction (with radiation damping)
@@ -282,7 +285,15 @@ src/
 - **[physics/mod.rs](src/physics/mod.rs)** - Core physics:
 
   - `gw_radiation_reaction()` - Peters 1964 formula implementation, with plunge phase enhancement
-  - `update_black_holes/bodies/debris()` - Gravity + radiation damping updates for three body types
+  - `update_debris()` - Debris gravity + radiation damping updates
+  - `center_of_mass()` - Mass-weighted center of mass of all black holes (shared by camera & grid)
+- **[physics/integrator.rs](src/physics/integrator.rs)** - Shared gravity integrator:
+
+  - `step_gravity()` - Single shared time-step for black holes & bodies; used by both the live simulation and trajectory prediction, so previews match actual evolution exactly
+- **[physics/spawn.rs](src/physics/spawn.rs)** - Spawn validation & auto-avoidance:
+
+  - `check_black_hole_spawn() / check_body_spawn()` - Reject positions inside event horizons, merger thresholds, Roche limits, or overlapping bodies (with a 20% safety margin)
+  - `safe_black_hole_pos() / safe_body_pos()` - Nudge a conflicting position to the nearest safe spot
 - **[physics/grid.rs](src/physics/grid.rs)** - Tendex line spacetime curvature visualization:
 
   - `compute_tidal_tensor()` - Computes tidal tensor $E_{jk}$ (with retarded GW contribution)
@@ -342,6 +353,7 @@ The web build uses the WebGL2 backend via `wgpu` for broad browser compatibility
 - **Mouse**: Rotate camera
 - **Scroll**: Zoom in/out
 - **UI Panel**: Add black holes/bodies, adjust parameters, toggle visualization options
+  - Spawn positions are validated in real time: the Add button is disabled with the reason shown when too close to an existing black hole/body (event horizon, merger threshold, Roche limit, or overlap); click **🛡 Safe Pos** to auto-nudge to a safe location
   - **Gravity Waves**: Toggle Tendex grid visualization
   - **Three Orthogonal Planes**: Show only XY/YZ/XZ central planes (cleaner cross-section)
   - **Grid Size / Spacing**: Adjust grid resolution and physical scale
